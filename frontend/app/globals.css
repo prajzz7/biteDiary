@@ -1,0 +1,270 @@
+@import "tailwindcss";
+@config "../tailwind.config.ts";
+
+:root {
+  color-scheme: dark;
+  --bg: #100f0d;
+  --surface: #1b1816;
+  --surface-sunken: #24201b;
+  --ink-primary: #f6edde;
+  --ink-secondary: #b8aa98;
+  --ink-tertiary: #7b7064;
+  --accent: #d19a52;
+  --accent-hover: #e4b264;
+  --accent-soft: rgba(209, 154, 82, 0.16);
+  --rating-gold: #f4a51c;
+  --success: #67a36b;
+  --error: #e36c61;
+  --border: #40372d;
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-ui: Inter, Geist, "Segoe UI", Arial, sans-serif;
+  --background: var(--bg);
+  --surface-muted: var(--surface-sunken);
+  --text: var(--ink-primary);
+  --muted: var(--ink-secondary);
+  --line: var(--border);
+  --accent-strong: var(--accent-hover);
+  --warning: var(--error);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, rgba(209, 154, 82, 0.12), transparent 34rem),
+    linear-gradient(180deg, #151311 0%, var(--bg) 46rem);
+  color: var(--ink-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-x: none;
+  text-rendering: geometricPrecision;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 32px;
+}
+
+.workspace {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.toolbar,
+.filter-row,
+.list-header,
+.restaurant-card,
+.empty-state {
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.service-pill {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border: 1px solid #bfd3d0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--accent-strong);
+  background: #e9f4f2;
+  font-size: 13px;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.filter-row label {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.filter-row input {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+.filter-row button {
+  border: 0;
+  border-radius: 6px;
+  padding: 11px 18px;
+  color: var(--bg);
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.filter-row button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.error-message {
+  margin: 14px 0 0;
+  color: var(--warning);
+  font-weight: 700;
+}
+
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 8px 8px 0 0;
+}
+
+.list-header h2 {
+  margin-bottom: 0;
+  font-size: 18px;
+}
+
+.list-header span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.restaurant-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.restaurant-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.restaurant-card h3 {
+  margin-bottom: 4px;
+  font-size: 18px;
+}
+
+.restaurant-card p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.restaurant-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.restaurant-meta span {
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--surface-muted);
+}
+
+.notes {
+  grid-column: 1 / -1;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.empty-state {
+  padding: 28px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.empty-state h3 {
+  margin-bottom: 6px;
+}
+
+.empty-state p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 18px;
+  }
+
+  .toolbar,
+  .filter-row,
+  .restaurant-card {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar {
+    align-items: stretch;
+  }
+
+  .filter-row button {
+    width: 100%;
+  }
+
+  .restaurant-meta {
+    justify-content: flex-start;
+  }
+}
