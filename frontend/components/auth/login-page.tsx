@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -15,6 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { AuthShell } from "./auth-shell";
+import { ApiError, authApi } from "@/lib/api/client";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Enter a valid email address"),
@@ -25,9 +27,8 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 type SubmitStatus = "idle" | "loading" | "success" | "error";
 
-const baseURL = process.env.NEXT_PUBLIC_BACKEND_BASE_URL;
-
 export default function LoginPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<SubmitStatus>("idle");
 
@@ -49,8 +50,6 @@ export default function LoginPage() {
     clearErrors();
     const parsed = loginSchema.safeParse(values);
 
-    console.log("BASEEE", baseURL, values);
-
     if (!parsed.success) {
       setStatus("error");
       parsed.error.issues.forEach((issue) => {
@@ -67,19 +66,29 @@ export default function LoginPage() {
     }
 
     setStatus("loading");
-    await fetch(`${baseURL}/login`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    try {
+      await authApi.login({
         email: values.email,
         password: values.password,
-      }),
-    });
-    clearErrors();
-    setStatus("success");
+      });
+
+      clearErrors();
+      setStatus("success");
+
+      const nextPath = new URLSearchParams(window.location.search).get("next");
+      router.replace(nextPath || "/dashboard");
+      router.refresh();
+    } catch (error) {
+      setStatus("error");
+
+      setError("password", {
+        message:
+          error instanceof ApiError
+            ? error.message
+            : "Unable to sign in. Please try again.",
+        type: "manual",
+      });
+    }
   }
 
   const isLoading = status === "loading";

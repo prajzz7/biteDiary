@@ -1,21 +1,46 @@
-import { Router } from "express";
+import { Router, type CookieOptions, type Response } from "express";
 import prisma from "../src/db/prisma";
 
 import {
+  generateAccessToken,
   generateHashedPassword,
-  generateUserToken,
+  generateRefreshToken,
+  tokenExpiry,
   verifyPasswordHash,
   verifyUserToken,
+  type AuthTokenPayload,
 } from "../utils/authUtils";
 import authMiddleware from "../middleware/authMiddleware";
 
-const tokenExpiryTimeInMilliSeconds =
-  Number(process.env.TOKEN_EXPIRY_TIME_IN_SECONDS ?? 3600) * 1000;
-
 const router = Router();
+const isProduction = process.env.NODE_ENV === "production";
+
+const authCookieOptions: CookieOptions = {
+  httpOnly: true,
+  path: "/",
+  sameSite: "lax",
+  secure: isProduction,
+};
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown error";
+}
+
+function setAuthCookies(res: Response, payload: AuthTokenPayload) {
+  res.cookie("accessToken", generateAccessToken(payload), {
+    ...authCookieOptions,
+    maxAge: tokenExpiry.accessTokenExpiryTimeInSeconds * 1000,
+  });
+
+  res.cookie("refreshToken", generateRefreshToken(payload), {
+    ...authCookieOptions,
+    maxAge: tokenExpiry.refreshTokenExpiryTimeInSeconds * 1000,
+  });
+}
+
+function clearAuthCookies(res: Response) {
+  res.clearCookie("accessToken", authCookieOptions);
+  res.clearCookie("refreshToken", authCookieOptions);
 }
 
 router.post("/register", async (req, res) => {
@@ -24,10 +49,9 @@ router.post("/register", async (req, res) => {
 
     if (!email || !password) {
       return res.status(400).json({
-        message: "Email and Password are required",
+        message: "Email and password are required",
       });
     }
-    console.log("body:::", req.body);
 
     const existingUser = await prisma.user.findUnique({
       where: {
@@ -41,24 +65,6 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    const jwtPayload = {
-      name,
-      email,
-    };
-
-    const jwtToken = generateUserToken(jwtPayload);
-
-    console.log("token", jwtToken);
-
-    res.cookie("accessToken", jwtToken, {
-      httpOnly: true,
-      maxAge: tokenExpiryTimeInMilliSeconds,
-    });
-    res.cookie("refreshToken", jwtToken, {
-      httpOnly: true,
-      maxAge: tokenExpiryTimeInMilliSeconds * 2,
-    });
-
     const hashedPassword = await generateHashedPassword(password);
 
     const user = await prisma.user.create({
@@ -68,16 +74,22 @@ router.post("/register", async (req, res) => {
         passwordHash: hashedPassword,
       },
       select: {
-        name: true,
-        email: true,
         createdAt: true,
+        email: true,
+        id: true,
+        name: true,
       },
     });
 
-    return res.status(200).json({
-      message: "User Registered Successfully",
-      data: user,
-      //Remove password hash from user object when returning
+    setAuthCookies(res, {
+      email: user.email,
+      id: user.id,
+      name: user.name,
+    });
+
+    return res.status(201).json({
+      message: "User registered successfully",
+      user,
     });
   } catch (error) {
     console.error("Something went wrong on /register api function", error);
@@ -94,7 +106,7 @@ router.post("/login", async (req, res) => {
 
     if (!email || !password) {
       return res.status(400).json({
-        message: "Email and Password are required",
+        message: "Email and password are required",
       });
     }
 
@@ -112,43 +124,32 @@ router.post("/login", async (req, res) => {
 
     const isPasswordMatch = await verifyPasswordHash(
       password,
-      existingUser?.passwordHash,
+      existingUser.passwordHash,
     );
 
-    if (isPasswordMatch) {
-      const jwtPayload = {
-        email,
-      };
-
-      const jwtAccessToken = generateUserToken(jwtPayload);
-      const jwtRefreshToken = generateUserToken(jwtPayload);
-
-      console.log("token", jwtAccessToken, ">>>>>>>>>>>>>>>", jwtRefreshToken);
-
-      res.cookie("accessToken", jwtAccessToken, {
-        httpOnly: true,
-        maxAge: tokenExpiryTimeInMilliSeconds,
-        sameSite: "lax",
-      });
-      res.cookie("refreshToken", jwtRefreshToken, {
-        httpOnly: true,
-        maxAge: tokenExpiryTimeInMilliSeconds * 2,
-        sameSite: "lax",
-      });
-
-      return res.status(200).json({
-        message: "Logged in successfully",
-      });
-    } else {
+    if (!isPasswordMatch) {
       return res.status(400).json({
         message: "Incorrect password. Please try again",
       });
     }
-  } catch (error: any) {
-    console.error("Something went wrong on /register api function", error);
+
+    const authPayload = {
+      email: existingUser.email,
+      id: existingUser.id,
+      name: existingUser.name,
+    };
+
+    setAuthCookies(res, authPayload);
+
+    return res.status(200).json({
+      message: "Logged in successfully",
+      user: authPayload,
+    });
+  } catch (error) {
+    console.error("Something went wrong on /login api function", error);
     return res.status(500).json({
       message: "Something went wrong",
-      error: error.message,
+      error: errorMessage(error),
     });
   }
 });
@@ -164,25 +165,46 @@ router.post("/refresh", async (req, res) => {
 
   try {
     const userPayload = verifyUserToken(refreshToken);
-    const newAccessToken = generateUserToken({
-      email: userPayload.email,
+    const user = await prisma.user.findUnique({
+      where: {
+        id: userPayload.id,
+      },
+      select: {
+        email: true,
+        id: true,
+        name: true,
+      },
     });
 
-    res.cookie("accessToken", newAccessToken, {
-      httpOnly: true,
-      maxAge: tokenExpiryTimeInMilliSeconds,
-      sameSite: "lax",
+    if (!user) {
+      clearAuthCookies(res);
+      return res.status(401).json({
+        message: "Session user no longer exists",
+      });
+    }
+
+    const authPayload = {
+      email: user.email,
+      id: user.id,
+      name: user.name,
+    };
+
+    setAuthCookies(res, authPayload);
+
+    return res.status(200).json({
+      message: "Session refreshed",
+      user: authPayload,
     });
   } catch (error) {
+    clearAuthCookies(res);
     return res.status(401).json({
       message: "Refresh token is invalid or expired",
     });
   }
 });
 
-router.post("/logout", async (req, res) => {
-  res.clearCookie("accessToken");
-  res.clearCookie("refreshToken");
+router.post("/logout", async (_req, res) => {
+  clearAuthCookies(res);
 
   return res.status(200).json({
     message: "Logged out successfully",
@@ -190,28 +212,41 @@ router.post("/logout", async (req, res) => {
 });
 
 router.get("/me", authMiddleware, async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({
+      message: "Session not valid",
+    });
+  }
+
   try {
     const user = await prisma.user.findUnique({
       where: {
-        email: req.user.email,
+        id: req.user.id,
       },
       select: {
-        email: true,
         createdAt: true,
+        email: true,
+        id: true,
+        name: true,
         updatedAt: true,
       },
     });
-    console.log("user", user);
 
-    if (user) {
-      return res.status(200).json({
-        user,
+    if (!user) {
+      clearAuthCookies(res);
+      return res.status(401).json({
+        message: "Session user no longer exists",
       });
     }
+
+    return res.status(200).json({
+      user,
+    });
   } catch (error) {
     console.error("Error in /me api", error);
-    return res.status(400).json({
-      message: "Session not valid",
+    return res.status(500).json({
+      message: "Something went wrong",
+      error: errorMessage(error),
     });
   }
 });

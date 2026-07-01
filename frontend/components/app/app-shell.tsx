@@ -1,10 +1,12 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, Home, Plus, RefreshCw, UserRound, Utensils } from "lucide-react";
+import { BarChart3, Home, Plus, RefreshCw, Utensils } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { LogoutButton } from "@/components/auth/logout-button";
+
 type AppShellProps = {
-  activeItem?: "Home" | "Restaurants" | "Add" | "Analytics" | "Profile";
+  activeItem?: "Home" | "Restaurants" | "Add" | "Analytics";
   children: ReactNode;
 };
 
@@ -17,7 +19,6 @@ const navItems: Array<{
   { href: "/restaurants", icon: Utensils, label: "Restaurants" },
   { href: "#add", icon: Plus, label: "Add" },
   { href: "/analytics", icon: BarChart3, label: "Analytics" },
-  { href: "#profile", icon: UserRound, label: "Profile" },
 ];
 
 export function AppShell({ activeItem = "Home", children }: AppShellProps) {
@@ -60,6 +61,7 @@ function DesktopSidebar({ activeItem }: { activeItem: NonNullable<AppShellProps[
           <p className="mt-1 text-sm leading-6 text-ink-secondary">Mumbai cafes are leading your diary.</p>
         </div>
       </div>
+      <LogoutButton />
     </aside>
   );
 }
@@ -74,6 +76,7 @@ function BottomNav({ activeItem }: { activeItem: NonNullable<AppShellProps["acti
         {navItems.map((item) => (
           <NavLink active={activeItem === item.label} key={item.label} {...item} />
         ))}
+        <LogoutButton variant="mobile" />
       </div>
     </nav>
   );

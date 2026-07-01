@@ -14,7 +14,6 @@ type RestaurantPayload = {
   notes?: string;
   rating?: number | string | null;
   visitedAt?: string | Date | null;
-  userId?: string;
 };
 
 function errorMessage(error: unknown) {
@@ -41,6 +40,12 @@ function parseOptionalRating(value: RestaurantPayload["rating"]) {
 
 router.post("/", async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
     const {
       name,
       cuisine,
@@ -51,18 +56,11 @@ router.post("/", async (req, res) => {
       notes,
       rating,
       visitedAt,
-      userId,
     } = req.body as RestaurantPayload;
 
     if (!name) {
       return res.status(400).json({
         message: "Restaurant name is required",
-      });
-    }
-
-    if (!userId) {
-      return res.status(400).json({
-        message: "User Id is required",
       });
     }
 
@@ -77,7 +75,7 @@ router.post("/", async (req, res) => {
         notes,
         rating: parseOptionalRating(rating),
         visitedAt: parseOptionalDate(visitedAt),
-        userId,
+        userId: req.user.id,
       },
     });
 
@@ -95,6 +93,12 @@ router.post("/", async (req, res) => {
 
 router.patch("/:restaurantId", async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
     const {
       name,
       cuisine,
@@ -107,9 +111,10 @@ router.patch("/:restaurantId", async (req, res) => {
       visitedAt,
     } = req.body as RestaurantPayload;
 
-    const existingRestaurant = await prisma.restaurant.findUnique({
+    const existingRestaurant = await prisma.restaurant.findFirst({
       where: {
         id: req.params.restaurantId,
+        userId: req.user.id,
       },
     });
 
@@ -150,14 +155,20 @@ router.patch("/:restaurantId", async (req, res) => {
 
 /* GET All Restaurants by Users. */
 router.get("/", async (req, res) => {
-  const userId =
-    typeof req.query.userId === "string" ? req.query.userId : undefined;
-
-  console.log("query userId::: ", userId);
-
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
     const restaurants = await prisma.restaurant.findMany({
-      where: userId ? { userId } : undefined,
+      where: {
+        userId: req.user.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
 
     return res.status(200).json({

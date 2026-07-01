@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { z } from "zod";
@@ -16,6 +17,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { AuthShell } from "./auth-shell";
+import { ApiError, authApi } from "@/lib/api/client";
 
 const signupSchema = z
   .object({
@@ -34,6 +36,7 @@ type SignUpFormValues = z.infer<typeof signupSchema>;
 type SubmitStatus = "idle" | "loading" | "success" | "error";
 
 export default function SignUpPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [status, setStatus] = useState<SubmitStatus>("idle");
@@ -74,9 +77,28 @@ export default function SignUpPage() {
     }
 
     setStatus("loading");
-    await new Promise((resolve) => setTimeout(resolve, 650));
-    clearErrors();
-    setStatus("success");
+    try {
+      await authApi.register({
+        email: values.email,
+        name: values.name,
+        password: values.password,
+      });
+
+      clearErrors();
+      setStatus("success");
+      router.replace("/dashboard");
+      router.refresh();
+    } catch (error) {
+      setStatus("error");
+
+      setError("email", {
+        message:
+          error instanceof ApiError
+            ? error.message
+            : "Unable to create account. Please try again.",
+        type: "manual",
+      });
+    }
   }
 
   const isLoading = status === "loading";
