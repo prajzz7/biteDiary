@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
@@ -245,13 +246,13 @@ function DashboardReadyState() {
               <p className="mt-3 text-sm leading-6 text-ink-secondary">
                 Add the place, rating, and the one dish you already know you would order again.
               </p>
-              <button
+              <Link
                 className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-accent px-5 text-sm font-bold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
-                type="button"
+                href="/add"
               >
                 <Plus aria-hidden="true" size={18} />
                 Quick add
-              </button>
+              </Link>
             </div>
           </section>
         </aside>

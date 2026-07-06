@@ -14,6 +14,51 @@ export type UserSession = {
   updatedAt?: string;
 };
 
+export type Restaurant = {
+  address?: string | null;
+  city?: string | null;
+  country?: string | null;
+  createdAt: string;
+  cuisine?: string | null;
+  id: string;
+  name: string;
+  notes?: string | null;
+  rating?: number | null;
+  state?: string | null;
+  updatedAt: string;
+  userId: string;
+  visitedAt?: string | null;
+};
+
+export type RestaurantFilterOptions = {
+  city: string[];
+  cuisine: string[];
+};
+
+export type CreateRestaurantPayload = {
+  address?: string;
+  city?: string;
+  country?: string;
+  cuisine?: string;
+  name: string;
+  notes?: string;
+  rating?: number;
+  state?: string;
+  visitedAt?: string;
+};
+
+export type UpdateRestaurantPayload = {
+  address?: string | null;
+  city?: string | null;
+  country?: string | null;
+  cuisine?: string | null;
+  name: string;
+  notes?: string | null;
+  rating?: number | null;
+  state?: string | null;
+  visitedAt?: string | null;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -177,5 +222,47 @@ export const authApi = {
       method: "POST",
       skipAuthRefresh: true,
     });
+  },
+};
+
+export const restaurantsApi = {
+  create(values: CreateRestaurantPayload) {
+    return apiRequest<{ data: Restaurant; message: string }>("/restaurants", {
+      body: values,
+      method: "POST",
+    });
+  },
+
+  delete(restaurantId: string) {
+    return apiRequest<{ message: string }>(`/restaurants/${restaurantId}`, {
+      method: "DELETE",
+    });
+  },
+
+  get(restaurantId: string) {
+    return apiRequest<{ data: Restaurant; message: string }>(
+      `/restaurants/${restaurantId}`,
+    );
+  },
+
+  list(queryParams = "") {
+    const path = queryParams ? `/restaurants?${queryParams}` : "/restaurants";
+    return apiRequest<{ data: Restaurant[]; message: string }>(path);
+  },
+
+  listFilters() {
+    return apiRequest<{ data: RestaurantFilterOptions; message: string }>(
+      "/restaurants/filter-options",
+    );
+  },
+
+  update(restaurantId: string, values: UpdateRestaurantPayload) {
+    return apiRequest<{ data: Restaurant; message: string }>(
+      `/restaurants/${restaurantId}`,
+      {
+        body: values,
+        method: "PATCH",
+      },
+    );
   },
 };

@@ -2,16 +2,20 @@ import { Router } from "express";
 
 import prisma from "../src/db/prisma";
 
+import type { Prisma } from "@prisma/client";
+
 const router = Router();
+
+class BadRequestError extends Error {}
 
 type RestaurantPayload = {
   name?: string;
-  cuisine?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  address?: string;
-  notes?: string;
+  cuisine?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  address?: string | null;
+  notes?: string | null;
   rating?: number | string | null;
   visitedAt?: string | Date | null;
 };
@@ -29,13 +33,43 @@ function parseOptionalDate(value: RestaurantPayload["visitedAt"]) {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
+function parseNullableDate(value: RestaurantPayload["visitedAt"]) {
+  if (value === null || value === "") {
+    return null;
+  }
+
+  return parseOptionalDate(value);
+}
+
+function parseNullableRating(value: RestaurantPayload["rating"]) {
+  if (value === null || value === "") {
+    return null;
+  }
+
+  return parseOptionalRating(value);
+}
+
 function parseOptionalRating(value: RestaurantPayload["rating"]) {
   if (value === undefined || value === null || value === "") {
     return undefined;
   }
 
   const rating = Number(value);
-  return Number.isNaN(rating) ? undefined : rating;
+
+  if (
+    !Number.isFinite(rating) ||
+    rating < 0 ||
+    rating > 10 ||
+    !Number.isInteger(rating * 2)
+  ) {
+    throw new BadRequestError("Rating must be between 0 and 10 in 0.5 steps.");
+  }
+
+  return rating;
+}
+
+function getQueryString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 router.post("/", async (req, res) => {
@@ -64,6 +98,8 @@ router.post("/", async (req, res) => {
       });
     }
 
+    const parsedRating = parseOptionalRating(rating);
+
     const restaurant = await prisma.restaurant.create({
       data: {
         name,
@@ -73,7 +109,7 @@ router.post("/", async (req, res) => {
         country,
         address,
         notes,
-        rating: parseOptionalRating(rating),
+        rating: parsedRating,
         visitedAt: parseOptionalDate(visitedAt),
         userId: req.user.id,
       },
@@ -84,6 +120,12 @@ router.post("/", async (req, res) => {
       data: restaurant,
     });
   } catch (error) {
+    if (error instanceof BadRequestError) {
+      return res.status(400).json({
+        message: error.message,
+      });
+    }
+
     return res.status(500).json({
       message: "Something went wrong",
       error: errorMessage(error),
@@ -124,6 +166,9 @@ router.patch("/:restaurantId", async (req, res) => {
       });
     }
 
+    const parsedRating = parseNullableRating(rating);
+    const parsedVisitedAt = parseNullableDate(visitedAt);
+
     const restaurant = await prisma.restaurant.update({
       where: {
         id: req.params.restaurantId,
@@ -136,8 +181,8 @@ router.patch("/:restaurantId", async (req, res) => {
         country,
         address,
         notes,
-        rating: parseOptionalRating(rating),
-        visitedAt: parseOptionalDate(visitedAt),
+        rating: parsedRating,
+        visitedAt: parsedVisitedAt,
       },
     });
 
@@ -146,6 +191,12 @@ router.patch("/:restaurantId", async (req, res) => {
       data: restaurant,
     });
   } catch (error) {
+    if (error instanceof BadRequestError) {
+      return res.status(400).json({
+        message: error.message,
+      });
+    }
+
     res.status(500).json({
       message: "Something went wrong",
       error: errorMessage(error),
@@ -162,10 +213,82 @@ router.get("/", async (req, res) => {
       });
     }
 
+    const search = getQueryString(req.query?.search);
+    const city = getQueryString(req.query?.city);
+    const cuisine = getQueryString(req.query?.cuisine);
+    const rating = getQueryString(req.query?.rating);
+
+    const where: Prisma.RestaurantWhereInput = {
+      userId: req.user.id,
+    };
+
+    if (search) {
+      where.OR = [
+        {
+          name: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        {
+          cuisine: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        {
+          city: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        {
+          notes: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        {
+          address: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+      ];
+    }
+    if (city) {
+      where.city = {
+        equals: city,
+        mode: "insensitive",
+      };
+    }
+    if (cuisine) {
+      where.cuisine = {
+        equals: cuisine,
+        mode: "insensitive",
+      };
+    }
+    if (rating) {
+      const minRating = Number(rating);
+
+      if (
+        Number.isFinite(minRating) &&
+        minRating >= 0 &&
+        minRating <= 10 &&
+        Number.isInteger(minRating * 2)
+      ) {
+        where.rating = {
+          gte: minRating,
+        };
+      } else {
+        return res.status(400).json({
+          message: "Rating must be between 0 and 10 in 0.5 steps.",
+        });
+      }
+    }
+
     const restaurants = await prisma.restaurant.findMany({
-      where: {
-        userId: req.user.id,
-      },
+      where,
       orderBy: {
         createdAt: "desc",
       },
@@ -174,6 +297,130 @@ router.get("/", async (req, res) => {
     return res.status(200).json({
       message: "Restaurant fetched successfully",
       data: restaurants,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Something went wrong",
+      error: errorMessage(error),
+    });
+  }
+});
+
+router.get("/filter-options", async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const restaurants = await prisma.restaurant.findMany({
+      where: {
+        userId: req.user.id,
+      },
+      select: {
+        city: true,
+        cuisine: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    const cityFilterOptions = [
+      "All",
+      ...new Set(
+        restaurants
+          .map((restaurant) => restaurant.city?.trim())
+          .filter(Boolean),
+      ),
+    ];
+    const cuisineFilterOptions = [
+      "All",
+      ...new Set(
+        restaurants
+          .map((restaurant) => restaurant.cuisine?.trim())
+          .filter(Boolean),
+      ),
+    ];
+
+    return res.status(200).json({
+      message: "Filters fetched successfully",
+      data: {
+        city: cityFilterOptions,
+        cuisine: cuisineFilterOptions,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Something went wrong",
+      error: errorMessage(error),
+    });
+  }
+});
+
+router.get("/:restaurantId", async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const restaurant = await prisma.restaurant.findFirst({
+      where: {
+        id: req.params.restaurantId,
+        userId: req.user.id,
+      },
+    });
+
+    if (!restaurant) {
+      return res.status(404).json({
+        message: "Restaurant not found",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Restaurant fetched successfully",
+      data: restaurant,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Something went wrong",
+      error: errorMessage(error),
+    });
+  }
+});
+
+router.delete("/:restaurantId", async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const existingRestaurant = await prisma.restaurant.findFirst({
+      where: {
+        id: req.params.restaurantId,
+        userId: req.user.id,
+      },
+    });
+
+    if (!existingRestaurant) {
+      return res.status(404).json({
+        message: "Restaurant not found",
+      });
+    }
+
+    await prisma.restaurant.delete({
+      where: {
+        id: req.params.restaurantId,
+      },
+    });
+
+    return res.status(200).json({
+      message: "Restaurant deleted successfully",
     });
   } catch (error) {
     return res.status(500).json({

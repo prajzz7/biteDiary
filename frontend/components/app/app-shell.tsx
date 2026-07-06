@@ -17,7 +17,7 @@ const navItems: Array<{
 }> = [
   { href: "/dashboard", icon: Home, label: "Home" },
   { href: "/restaurants", icon: Utensils, label: "Restaurants" },
-  { href: "#add", icon: Plus, label: "Add" },
+  { href: "/add", icon: Plus, label: "Add" },
   { href: "/analytics", icon: BarChart3, label: "Analytics" },
 ];
 
