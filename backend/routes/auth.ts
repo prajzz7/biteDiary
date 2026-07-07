@@ -15,6 +15,12 @@ import authMiddleware from "../middleware/authMiddleware";
 const router = Router();
 const isProduction = process.env.NODE_ENV === "production";
 
+console.log("Auth cookie config debug:", {
+  nodeEnv: process.env.NODE_ENV,
+  isProduction,
+  frontendUrl: process.env.FRONTEND_URL,
+});
+
 const authCookieOptions: CookieOptions = {
   httpOnly: true,
   path: "/",
