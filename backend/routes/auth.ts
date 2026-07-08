@@ -33,17 +33,21 @@ function errorMessage(error: unknown) {
 }
 
 function setAuthCookies(res: Response, payload: AuthTokenPayload) {
-  res.cookie("accessToken", generateAccessToken(payload), {
-    ...authCookieOptions,
-    maxAge: tokenExpiry.accessTokenExpiryTimeInSeconds * 1000,
-  });
+  try {
+    res.cookie("accessToken", generateAccessToken(payload), {
+      ...authCookieOptions,
+      maxAge: tokenExpiry.accessTokenExpiryTimeInSeconds * 1000,
+    });
 
-  res.cookie("refreshToken", generateRefreshToken(payload), {
-    ...authCookieOptions,
-    maxAge: tokenExpiry.refreshTokenExpiryTimeInSeconds * 1000,
-  });
+    res.cookie("refreshToken", generateRefreshToken(payload), {
+      ...authCookieOptions,
+      maxAge: tokenExpiry.refreshTokenExpiryTimeInSeconds * 1000,
+    });
 
-  console.log("authCookieOptions", authCookieOptions);
+    console.log("authCookieOptions", authCookieOptions);
+  } catch (error) {
+    console.error("Error setting cookie in response headers", error);
+  }
 }
 
 function clearAuthCookies(res: Response) {
@@ -147,6 +151,7 @@ router.post("/login", async (req, res) => {
       name: existingUser.name,
     };
 
+    console.log("RES before setting cookie>>", res);
     setAuthCookies(res, authPayload);
 
     console.log("RES after setting cookie>>", res);
