@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const API_BASE_URL =
-  process.env.BACKEND_INTERNAL_URL ??
-  process.env.NEXT_PUBLIC_BACKEND_BASE_URL ??
-  "http://localhost:5000/api";
-
 const publicRoutes = new Set(["/login", "/signup"]);
 
 function hasAccessCookie(request: NextRequest) {
@@ -33,90 +28,18 @@ function dashboardUrl(request: NextRequest) {
   return new URL("/dashboard", request.url);
 }
 
-function buildCookieHeader(request: NextRequest) {
-  return request.cookies
-    .getAll()
-    .map((cookie) => `${cookie.name}=${cookie.value}`)
-    .join("; ");
-}
+function nextWithPathname(request: NextRequest, pathname: string) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
 
-function splitSetCookieHeader(header: string) {
-  return header
-    .split(/,(?=\s*[^;,\s]+=)/)
-    .map((cookie) => cookie.trim())
-    .filter(Boolean);
-}
-
-function getSetCookieHeaders(headers: Headers) {
-  const headersWithGetSetCookie = headers as Headers & {
-    getSetCookie?: () => string[];
-  };
-
-  if (typeof headersWithGetSetCookie.getSetCookie === "function") {
-    return headersWithGetSetCookie.getSetCookie();
-  }
-
-  const setCookieHeader = headers.get("set-cookie");
-  return setCookieHeader ? splitSetCookieHeader(setCookieHeader) : [];
-}
-
-function appendAuthCookies(response: NextResponse, authResponse: Response) {
-  getSetCookieHeaders(authResponse.headers).forEach((cookie) => {
-    response.headers.append("set-cookie", cookie);
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
   });
 
+  response.headers.set("x-pathname", pathname);
   return response;
-}
-
-function clearAuthCookies(response: NextResponse) {
-  response.cookies.delete("accessToken");
-  response.cookies.delete("refreshToken");
-  return response;
-}
-
-async function backendAuthRequest(
-  request: NextRequest,
-  path: "/me" | "/refresh",
-) {
-  const cookieHeader = buildCookieHeader(request);
-
-  if (!cookieHeader) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      cache: "no-store",
-      headers: {
-        cookie: cookieHeader,
-      },
-      method: path === "/refresh" ? "POST" : "GET",
-    });
-
-    return response.ok ? response : null;
-  } catch {
-    return null;
-  }
-}
-
-async function hasValidAccessSession(request: NextRequest) {
-  if (!hasAccessCookie(request)) {
-    return false;
-  }
-
-  return Boolean(await backendAuthRequest(request, "/me"));
-}
-
-async function refreshSession(request: NextRequest) {
-  if (!request.cookies.has("refreshToken")) {
-    return null;
-  }
-
-  return backendAuthRequest(request, "/refresh");
-}
-
-async function redirectWithFreshSession(target: URL, authResponse: Response) {
-  return appendAuthCookies(NextResponse.redirect(target), authResponse);
 }
 
 export async function middleware(request: NextRequest) {
@@ -124,59 +47,25 @@ export async function middleware(request: NextRequest) {
   const hasSession = hasSessionCookie(request);
   const isPublic = isPublicRoute(pathname);
 
-  if (!hasSession) {
-    if (pathname === "/") {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-
-    if (isPublic) {
-      return NextResponse.next();
-    }
-
-    return NextResponse.redirect(loginRedirect(request));
-  }
-
   if (pathname === "/") {
-    if (await hasValidAccessSession(request)) {
-      return NextResponse.redirect(dashboardUrl(request));
-    }
-
-    const refreshResponse = await refreshSession(request);
-
-    if (refreshResponse) {
-      return redirectWithFreshSession(dashboardUrl(request), refreshResponse);
-    }
-
-    return clearAuthCookies(
-      NextResponse.redirect(new URL("/login", request.url)),
+    return NextResponse.redirect(
+      new URL(hasSession ? "/dashboard" : "/login", request.url),
     );
   }
 
-  if (isPublic) {
-    if (await hasValidAccessSession(request)) {
-      return NextResponse.redirect(dashboardUrl(request));
-    }
-
-    const refreshResponse = await refreshSession(request);
-
-    if (refreshResponse) {
-      return redirectWithFreshSession(dashboardUrl(request), refreshResponse);
-    }
-
-    return clearAuthCookies(NextResponse.next());
+  if (!hasSession && !isPublic) {
+    return NextResponse.redirect(loginRedirect(request));
   }
 
-  if (await hasValidAccessSession(request)) {
-    return NextResponse.next();
+  if (hasSession && isPublic) {
+    return NextResponse.redirect(dashboardUrl(request));
   }
 
-  const refreshResponse = await refreshSession(request);
-
-  if (refreshResponse) {
-    return redirectWithFreshSession(new URL(request.url), refreshResponse);
+  if (hasSession && !isPublic) {
+    return nextWithPathname(request, pathname);
   }
 
-  return clearAuthCookies(NextResponse.redirect(loginRedirect(request)));
+  return NextResponse.next();
 }
 
 export const config = {

@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_BASE_URL ?? "/api";
+const API_BASE_URL = "/api";
 type ApiRequestOptions = Omit<RequestInit, "body" | "credentials"> & {
   body?: BodyInit | object | null;
   skipAuthRefresh?: boolean;
@@ -113,7 +113,7 @@ async function readResponse(response: Response) {
 
 async function refreshAccessToken() {
   if (!refreshPromise) {
-    refreshPromise = fetch(endpoint("/refresh"), {
+    refreshPromise = fetch(endpoint("/auth/refresh"), {
       credentials: "include",
       method: "POST",
     })
@@ -189,7 +189,7 @@ export async function apiRequest<T>(
 
 export const authApi = {
   login(values: { email: string; password: string }) {
-    return apiRequest<{ message: string; user: UserSession }>("/login", {
+    return apiRequest<{ message: string; user: UserSession }>("/auth/login", {
       body: values,
       method: "POST",
       skipAuthRefresh: true,
@@ -197,7 +197,7 @@ export const authApi = {
   },
 
   logout() {
-    return apiRequest<{ message: string }>("/logout", {
+    return apiRequest<{ message: string }>("/auth/logout", {
       method: "POST",
       skipAuthRefresh: true,
     });
@@ -208,14 +208,14 @@ export const authApi = {
   },
 
   refresh() {
-    return apiRequest<{ message: string; user: UserSession }>("/refresh", {
+    return apiRequest<{ message: string; user: UserSession }>("/auth/refresh", {
       method: "POST",
       skipAuthRefresh: true,
     });
   },
 
   register(values: { email: string; name: string; password: string }) {
-    return apiRequest<{ message: string; user: UserSession }>("/register", {
+    return apiRequest<{ message: string; user: UserSession }>("/auth/signup", {
       body: values,
       method: "POST",
       skipAuthRefresh: true,
