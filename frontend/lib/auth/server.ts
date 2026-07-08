@@ -26,7 +26,7 @@ async function buildCookieHeader() {
 }
 
 async function fetchSessionUser(cookieHeader: string) {
-  const response = await fetch(`${API_BASE_URL}/me`, {
+  const response = await fetch(`/api/me`, {
     cache: "no-store",
     headers: {
       cookie: cookieHeader,

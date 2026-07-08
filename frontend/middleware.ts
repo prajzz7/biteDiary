@@ -88,7 +88,7 @@ async function backendAuthRequest(
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const response = await fetch(`/api/${path}`, {
       cache: "no-store",
       headers: {
         cookie: cookieHeader,
