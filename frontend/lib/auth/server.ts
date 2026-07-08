@@ -2,6 +2,10 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import type { UserSession } from "@/lib/api/client";
+import {
+  getSetCookieHeaders,
+  mergeSetCookiesIntoCookieHeader,
+} from "@/lib/auth/cookies";
 
 const API_BASE_URL =
   process.env.BACKEND_INTERNAL_URL ??
@@ -39,6 +43,18 @@ async function fetchSessionUser(cookieHeader: string) {
   return data.user;
 }
 
+async function refreshSession(cookieHeader: string) {
+  const response = await fetch(`${API_BASE_URL}/refresh`, {
+    cache: "no-store",
+    headers: {
+      cookie: cookieHeader,
+    },
+    method: "POST",
+  });
+
+  return response.ok ? response : null;
+}
+
 export async function getSessionUser(): Promise<UserSession | null> {
   const cookieHeader = await buildCookieHeader();
 
@@ -47,7 +63,24 @@ export async function getSessionUser(): Promise<UserSession | null> {
   }
 
   try {
-    return await fetchSessionUser(cookieHeader);
+    const user = await fetchSessionUser(cookieHeader);
+
+    if (user) {
+      return user;
+    }
+
+    const refreshResponse = await refreshSession(cookieHeader);
+
+    if (!refreshResponse) {
+      return null;
+    }
+
+    const refreshedCookieHeader = mergeSetCookiesIntoCookieHeader(
+      cookieHeader,
+      getSetCookieHeaders(refreshResponse.headers),
+    );
+
+    return await fetchSessionUser(refreshedCookieHeader);
   } catch (error) {
     console.error("Failed to verify session on server", error);
     return null;
