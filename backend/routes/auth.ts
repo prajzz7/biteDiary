@@ -22,7 +22,7 @@ console.log("Auth cookie config debug:", {
 });
 
 const authCookieOptions: CookieOptions = {
-  httpOnly: isProduction ? false : true,
+  httpOnly: true,
   path: "/",
   sameSite: isProduction ? "none" : "lax",
   secure: isProduction,
