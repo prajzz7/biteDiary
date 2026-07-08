@@ -15,12 +15,6 @@ import authMiddleware from "../middleware/authMiddleware";
 const router = Router();
 const isProduction = process.env.NODE_ENV === "production";
 
-console.log("Auth cookie config debug:", {
-  nodeEnv: process.env.NODE_ENV,
-  isProduction,
-  frontendUrl: process.env.FRONTEND_URL,
-});
-
 const authCookieOptions: CookieOptions = {
   httpOnly: true,
   path: "/",
@@ -33,21 +27,15 @@ function errorMessage(error: unknown) {
 }
 
 function setAuthCookies(res: Response, payload: AuthTokenPayload) {
-  try {
-    res.cookie("accessToken", generateAccessToken(payload), {
-      ...authCookieOptions,
-      maxAge: tokenExpiry.accessTokenExpiryTimeInSeconds * 1000,
-    });
+  res.cookie("accessToken", generateAccessToken(payload), {
+    ...authCookieOptions,
+    maxAge: tokenExpiry.accessTokenExpiryTimeInSeconds * 1000,
+  });
 
-    res.cookie("refreshToken", generateRefreshToken(payload), {
-      ...authCookieOptions,
-      maxAge: tokenExpiry.refreshTokenExpiryTimeInSeconds * 1000,
-    });
-
-    console.log("authCookieOptions", authCookieOptions);
-  } catch (error) {
-    console.error("Error setting cookie in response headers", error);
-  }
+  res.cookie("refreshToken", generateRefreshToken(payload), {
+    ...authCookieOptions,
+    maxAge: tokenExpiry.refreshTokenExpiryTimeInSeconds * 1000,
+  });
 }
 
 function clearAuthCookies(res: Response) {
@@ -151,10 +139,7 @@ router.post("/login", async (req, res) => {
       name: existingUser.name,
     };
 
-    console.log("RES before setting cookie>>", res);
     setAuthCookies(res, authPayload);
-
-    console.log("RES after setting cookie>>", res);
 
     return res.status(200).json({
       message: "Logged in successfully",

@@ -22,8 +22,6 @@ function isPublicRoute(pathname: string) {
 function loginRedirect(request: NextRequest) {
   const loginUrl = new URL("/login", request.url);
 
-  console.log("loingURL:::", request.url);
-
   if (request.nextUrl.pathname !== "/") {
     loginUrl.searchParams.set("next", request.nextUrl.pathname);
   }
@@ -66,7 +64,6 @@ function appendAuthCookies(response: NextResponse, authResponse: Response) {
   getSetCookieHeaders(authResponse.headers).forEach((cookie) => {
     response.headers.append("set-cookie", cookie);
   });
-  console.log("RESPONSE NEXT COOKIE SET>>>>>>>>>>", response);
 
   return response;
 }
@@ -88,12 +85,11 @@ async function backendAuthRequest(
   }
 
   try {
-    const response = await fetch(`/api/${path}`, {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
       cache: "no-store",
       headers: {
         cookie: cookieHeader,
       },
-      // credentials: "include",
       method: path === "/refresh" ? "POST" : "GET",
     });
 
@@ -125,21 +121,8 @@ async function redirectWithFreshSession(target: URL, authResponse: Response) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  console.log("RAKUU", request.cookies);
-  console.log("RAKUU getAll", request.cookies.getAll());
-  console.log("RAKUU has", request.cookies.has("accessToken"));
-  console.log("RAKUU get", request.cookies.get("accessToken"));
-
   const hasSession = hasSessionCookie(request);
   const isPublic = isPublicRoute(pathname);
-
-  console.log("hasSession>>>>>>>>>>", hasSession);
-  console.log("request>>>>>>>>>>", request);
-
-  const response = NextResponse.next();
-
-  response.headers.append("PrajwalTEST", "56");
-  response.cookies.set("myCookie", "PRAJWALCOOKIETEST");
 
   if (!hasSession) {
     if (pathname === "/") {
@@ -197,5 +180,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };

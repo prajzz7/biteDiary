@@ -1,5 +1,4 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_BASE_URL ?? "/api";
-
 type ApiRequestOptions = Omit<RequestInit, "body" | "credentials"> & {
   body?: BodyInit | object | null;
   skipAuthRefresh?: boolean;
@@ -79,7 +78,7 @@ export class AuthSessionExpiredError extends ApiError {
 let refreshPromise: Promise<boolean> | null = null;
 
 function endpoint(path: string) {
-  return `/api${path.startsWith("/") ? path : `/${path}`}`;
+  return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 function buildRequestInit(options: ApiRequestOptions): RequestInit {

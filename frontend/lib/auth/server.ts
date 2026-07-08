@@ -17,8 +17,6 @@ function loginRedirectPath(pathname?: string) {
 
 async function buildCookieHeader() {
   const cookieStore = await cookies();
-  console.log("cookies server RAKU", cookieStore);
-  console.log("cookies server RAKU getALL", cookieStore.getAll());
   return cookieStore
     .getAll()
     .map((cookie) => `${cookie.name}=${cookie.value}`)
@@ -26,12 +24,11 @@ async function buildCookieHeader() {
 }
 
 async function fetchSessionUser(cookieHeader: string) {
-  const response = await fetch(`/api/me`, {
+  const response = await fetch(`${API_BASE_URL}/me`, {
     cache: "no-store",
     headers: {
       cookie: cookieHeader,
     },
-    // credentials: "include",
   });
 
   if (!response.ok) {
@@ -50,7 +47,7 @@ export async function getSessionUser(): Promise<UserSession | null> {
   }
 
   try {
-    return fetchSessionUser(cookieHeader);
+    return await fetchSessionUser(cookieHeader);
   } catch (error) {
     console.error("Failed to verify session on server", error);
     return null;
