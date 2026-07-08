@@ -26,9 +26,10 @@ async function buildCookieHeader() {
 async function fetchSessionUser(cookieHeader: string) {
   const response = await fetch(`${API_BASE_URL}/me`, {
     cache: "no-store",
-    headers: {
-      cookie: cookieHeader,
-    },
+    // headers: {
+    //   cookie: cookieHeader,
+    // },
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -54,7 +55,9 @@ export async function getSessionUser(): Promise<UserSession | null> {
   }
 }
 
-export async function requireUser(currentPathname?: string): Promise<UserSession> {
+export async function requireUser(
+  currentPathname?: string,
+): Promise<UserSession> {
   const user = await getSessionUser();
 
   if (!user) {
