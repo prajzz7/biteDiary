@@ -127,14 +127,13 @@ export async function middleware(request: NextRequest) {
   const hasSession = hasSessionCookie(request);
   const isPublic = isPublicRoute(pathname);
 
-  console.log("RESPONSE>>>>>>>>>>", NextResponse);
-  console.log("REquest>>>>>>>>>>", NextRequest);
+  console.log("hasSession>>>>>>>>>>", hasSession);
+  console.log("request>>>>>>>>>>", request);
 
   const response = NextResponse.next();
-  console.log("RESPONSE NEXT>>>>>>>>>>", response);
+
   response.headers.append("PrajwalTEST", "56");
   response.cookies.set("myCookie", "PRAJWALCOOKIETEST");
-  console.log("RESPONSE NEXT AFTER APPEND>>>>>>>>>>", response);
 
   if (!hasSession) {
     if (pathname === "/") {
