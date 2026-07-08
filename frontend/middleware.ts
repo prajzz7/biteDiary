@@ -90,10 +90,10 @@ async function backendAuthRequest(
   try {
     const response = await fetch(`${API_BASE_URL}${path}`, {
       cache: "no-store",
-      // headers: {
-      //   cookie: cookieHeader,
-      // },
-      credentials: "include",
+      headers: {
+        cookie: cookieHeader,
+      },
+      // credentials: "include",
       method: path === "/refresh" ? "POST" : "GET",
     });
 
@@ -125,6 +125,11 @@ async function redirectWithFreshSession(target: URL, authResponse: Response) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  console.log("RAKUU", request.cookies);
+  console.log("RAKUU getAll", request.cookies.getAll());
+  console.log("RAKUU has", request.cookies.has("accessToken"));
+  console.log("RAKUU get", request.cookies.get("accessToken"));
+
   const hasSession = hasSessionCookie(request);
   const isPublic = isPublicRoute(pathname);
 
