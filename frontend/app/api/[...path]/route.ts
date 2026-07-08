@@ -31,6 +31,17 @@ function getSetCookieHeaders(headers: Headers) {
   return setCookieHeader ? splitSetCookieHeader(setCookieHeader) : [];
 }
 
+function rewriteCookieForFrontend(cookie: string) {
+  const attributes = cookie
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => !part.toLowerCase().startsWith("domain="))
+    .filter((part) => !part.toLowerCase().startsWith("path="));
+
+  return [...attributes, "Path=/"].join("; ");
+}
+
 function buildBackendUrl(path: string[], search: string) {
   const baseUrl = BACKEND_BASE_URL.replace(/\/$/, "");
   const backendPath = path.map(encodeURIComponent).join("/");
@@ -102,7 +113,7 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
   });
 
   getSetCookieHeaders(backendResponse.headers).forEach((cookie) => {
-    response.headers.append("set-cookie", cookie);
+    response.headers.append("set-cookie", rewriteCookieForFrontend(cookie));
   });
 
   return response;
