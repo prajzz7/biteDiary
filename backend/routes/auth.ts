@@ -42,6 +42,8 @@ function setAuthCookies(res: Response, payload: AuthTokenPayload) {
     ...authCookieOptions,
     maxAge: tokenExpiry.refreshTokenExpiryTimeInSeconds * 1000,
   });
+
+  console.log("authCookieOptions", authCookieOptions);
 }
 
 function clearAuthCookies(res: Response) {
@@ -146,6 +148,8 @@ router.post("/login", async (req, res) => {
     };
 
     setAuthCookies(res, authPayload);
+
+    console.log("RES after setting cookie>>", res);
 
     return res.status(200).json({
       message: "Logged in successfully",
