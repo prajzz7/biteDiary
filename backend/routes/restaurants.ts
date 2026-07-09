@@ -88,8 +88,8 @@ router.post("/", async (req, res) => {
       country,
       address,
       notes,
-      rating,
-      visitedAt,
+      // rating,
+      // visitedAt,
     } = req.body as RestaurantPayload;
 
     if (!name) {
@@ -98,7 +98,7 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const parsedRating = parseOptionalRating(rating);
+    // const parsedRating = parseOptionalRating(rating);
 
     const restaurant = await prisma.restaurant.create({
       data: {
@@ -109,8 +109,8 @@ router.post("/", async (req, res) => {
         country,
         address,
         notes,
-        rating: parsedRating,
-        visitedAt: parseOptionalDate(visitedAt),
+        // rating: parsedRating,
+        // visitedAt: parseOptionalDate(visitedAt),
         userId: req.user.id,
       },
     });
@@ -149,8 +149,8 @@ router.patch("/:restaurantId", async (req, res) => {
       country,
       address,
       notes,
-      rating,
-      visitedAt,
+      // rating,
+      // visitedAt,
     } = req.body as RestaurantPayload;
 
     const existingRestaurant = await prisma.restaurant.findFirst({
@@ -166,8 +166,8 @@ router.patch("/:restaurantId", async (req, res) => {
       });
     }
 
-    const parsedRating = parseNullableRating(rating);
-    const parsedVisitedAt = parseNullableDate(visitedAt);
+    // const parsedRating = parseNullableRating(rating);
+    // const parsedVisitedAt = parseNullableDate(visitedAt);
 
     const restaurant = await prisma.restaurant.update({
       where: {
@@ -181,8 +181,8 @@ router.patch("/:restaurantId", async (req, res) => {
         country,
         address,
         notes,
-        rating: parsedRating,
-        visitedAt: parsedVisitedAt,
+        // rating: parsedRating,
+        // visitedAt: parsedVisitedAt,
       },
     });
 
@@ -268,24 +268,24 @@ router.get("/", async (req, res) => {
         mode: "insensitive",
       };
     }
-    if (rating) {
-      const minRating = Number(rating);
+    // if (rating) {
+    //   const minRating = Number(rating);
 
-      if (
-        Number.isFinite(minRating) &&
-        minRating >= 0 &&
-        minRating <= 10 &&
-        Number.isInteger(minRating * 2)
-      ) {
-        where.rating = {
-          gte: minRating,
-        };
-      } else {
-        return res.status(400).json({
-          message: "Rating must be between 0 and 10 in 0.5 steps.",
-        });
-      }
-    }
+    //   if (
+    //     Number.isFinite(minRating) &&
+    //     minRating >= 0 &&
+    //     minRating <= 10 &&
+    //     Number.isInteger(minRating * 2)
+    //   ) {
+    //     where.rating = {
+    //       gte: minRating,
+    //     };
+    //   } else {
+    //     return res.status(400).json({
+    //       message: "Rating must be between 0 and 10 in 0.5 steps.",
+    //     });
+    //   }
+    // }
 
     const restaurants = await prisma.restaurant.findMany({
       where,
