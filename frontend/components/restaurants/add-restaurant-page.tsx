@@ -15,6 +15,8 @@ import {
   MapPin,
   Navigation,
   Plus,
+  ReceiptText,
+  Star,
   Utensils,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -61,6 +63,18 @@ type SubmitStatus = "idle" | "loading" | "success" | "error";
 
 const quickCuisines = ["Seafood", "Japanese", "Italian", "Indian", "Cafe"];
 const quickRatings = [10, 9.5, 9, 8.5, 8, 7.5];
+const mockDishDrafts = [
+  {
+    name: "Butter Garlic Prawns",
+    note: "Would reorder",
+    rating: "9.5",
+  },
+  {
+    name: "Truffle Risotto",
+    note: "Rich, share next time",
+    rating: "8.5",
+  },
+];
 
 export default function AddRestaurantPage() {
   const [status, setStatus] = useState<SubmitStatus>("idle");
@@ -216,8 +230,8 @@ export default function AddRestaurantPage() {
               <section>
                 <SectionTitle
                   icon={CalendarDays}
-                  subtitle="Rate the visit while it is still fresh."
-                  title="Visit"
+                  subtitle="This becomes the first RestaurantVisit row when the backend model is added."
+                  title="First visit"
                 />
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -345,6 +359,8 @@ export default function AddRestaurantPage() {
                 </div>
               </section>
 
+              <VisitDishPreview />
+
               <section>
                 <SectionTitle
                   icon={ClipboardPenLine}
@@ -443,11 +459,12 @@ export default function AddRestaurantPage() {
                 />
                 <div>
                   <h2 className="font-display text-xl font-semibold text-ink-primary">
-                    Saved privately
+                    Future-safe shape
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-ink-secondary">
-                    Restaurants are linked to your logged-in user on the
-                    backend, so another user cannot create entries for you.
+                    A new place can create the restaurant and its first visit
+                    together. Later revisits should add visit rows without
+                    duplicating the restaurant.
                   </p>
                 </div>
               </div>
@@ -527,6 +544,55 @@ function SectionTitle({
         <p className="mt-1 text-sm leading-6 text-ink-secondary">{subtitle}</p>
       </div>
     </div>
+  );
+}
+
+function VisitDishPreview() {
+  return (
+    <section>
+      <SectionTitle
+        icon={ReceiptText}
+        subtitle="Capture what you ate, what stood out, and what you would order again."
+        title="Dishes from this visit"
+      />
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        {mockDishDrafts.map((dish) => (
+          <article
+            className="rounded-card border border-border bg-bg p-4 shadow-card"
+            key={dish.name}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate font-display text-xl font-semibold text-ink-primary">
+                  {dish.name}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-success">
+                  {dish.note}
+                </p>
+              </div>
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold text-ink-primary">
+                <Star
+                  aria-hidden="true"
+                  className="text-rating-gold"
+                  fill="currentColor"
+                  size={14}
+                />
+                {dish.rating}
+              </span>
+            </div>
+          </article>
+        ))}
+
+        <button
+          className="flex min-h-[112px] items-center justify-center gap-2 rounded-card border border-dashed border-accent/40 bg-accent-soft px-4 text-sm font-bold text-accent transition hover:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          type="button"
+        >
+          <Plus aria-hidden="true" size={18} />
+          Add dish
+        </button>
+      </div>
+    </section>
   );
 }
 

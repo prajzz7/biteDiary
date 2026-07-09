@@ -12,11 +12,14 @@ import {
   CheckCircle2,
   ChefHat,
   ClipboardPenLine,
+  History,
   LoaderCircle,
   MapPin,
   Navigation,
   Pencil,
+  PlusCircle,
   RefreshCw,
+  ReceiptText,
   Save,
   Star,
   Trash2,
@@ -64,6 +67,50 @@ type DetailView = "loading" | "ready" | "error" | "not-found";
 type MutationStatus = "idle" | "loading" | "success" | "error";
 
 const quickRatings = [10, 9.5, 9, 8.5, 8, 7.5];
+const mockVisitHistory = [
+  {
+    date: "18 Jun 2026",
+    dishes: ["Butter Garlic Prawns", "Poi", "Bebinca"],
+    mood: "Dinner",
+    notes: "Seafood was excellent again. Worth booking for a slow dinner.",
+    rating: 9.5,
+    spend: "Rs. 3,200",
+  },
+  {
+    date: "02 May 2026",
+    dishes: ["Prawn Balchao", "Chorizo Pao"],
+    mood: "Friends",
+    notes: "Great energy, slightly loud, food still memorable.",
+    rating: 8.5,
+    spend: "Rs. 2,750",
+  },
+  {
+    date: "14 Mar 2026",
+    dishes: ["Crab Xec Xec", "Serradura"],
+    mood: "First visit",
+    notes: "First saved visit. Add dishes here once the visit table exists.",
+    rating: 9,
+    spend: "Rs. 2,400",
+  },
+];
+
+const mockVisitDishes = [
+  {
+    name: "Butter Garlic Prawns",
+    note: "Would reorder",
+    rating: 9.5,
+  },
+  {
+    name: "Crab Xec Xec",
+    note: "Best with poi",
+    rating: 9,
+  },
+  {
+    name: "Bebinca",
+    note: "Share next time",
+    rating: 8,
+  },
+];
 
 export default function RestaurantDetailPage({
   restaurantId,
@@ -225,7 +272,10 @@ export default function RestaurantDetailPage({
                     setValue={setValue}
                   />
                 ) : (
-                  <ReadDetails restaurant={restaurant} />
+                  <>
+                    <ReadDetails restaurant={restaurant} />
+                    <VisitHistorySection />
+                  </>
                 )}
               </div>
 
@@ -377,6 +427,126 @@ function ReadDetails({ restaurant }: { restaurant: Restaurant }) {
             "No notes yet. Edit this restaurant to add what stood out."}
         </p>
       </article>
+    </section>
+  );
+}
+
+function VisitHistorySection() {
+  return (
+    <section
+      className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]"
+      aria-labelledby="visit-history-title"
+    >
+      <div className="rounded-card border border-border bg-surface p-4 shadow-card sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="flex items-center gap-2 text-xs font-bold uppercase text-accent">
+              <History aria-hidden="true" size={16} />
+              Visit history
+            </p>
+            <h2
+              className="mt-2 font-display text-2xl font-semibold text-ink-primary"
+              id="visit-history-title"
+            >
+              Every visit becomes its own memory.
+            </h2>
+          </div>
+          <button
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-success/30 bg-success/10 px-4 text-sm font-bold text-success transition hover:bg-success/15 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            type="button"
+          >
+            <PlusCircle aria-hidden="true" size={17} />
+            Log revisit
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          {mockVisitHistory.map((visit, index) => (
+            <article
+              className="relative rounded-card border border-border bg-bg p-4"
+              key={`${visit.date}-${visit.mood}`}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-accent/30 bg-accent-soft px-3 py-1 text-xs font-bold text-accent">
+                      Visit {mockVisitHistory.length - index}
+                    </span>
+                    <span className="text-sm font-bold text-ink-primary">
+                      {visit.date}
+                    </span>
+                    <span className="text-sm font-semibold text-ink-tertiary">
+                      {visit.mood}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-ink-secondary">
+                    {visit.notes}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <RatingPill rating={visit.rating} />
+                  <span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold text-ink-secondary">
+                    {visit.spend}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {visit.dishes.map((dish) => (
+                  <span
+                    className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold text-ink-secondary"
+                    key={dish}
+                  >
+                    {dish}
+                  </span>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <aside className="space-y-4">
+        <section className="rounded-card border border-success/25 bg-success/10 p-4 shadow-card">
+          <p className="flex items-center gap-2 text-xs font-bold uppercase text-success">
+            <ReceiptText aria-hidden="true" size={16} />
+            Reorder notes
+          </p>
+          <div className="mt-4 space-y-3">
+            {mockVisitDishes.map((dish) => (
+              <div
+                className="rounded-control border border-success/20 bg-bg/70 p-3"
+                key={dish.name}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-display text-lg font-semibold text-ink-primary">
+                      {dish.name}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-success">
+                      {dish.note}
+                    </p>
+                  </div>
+                  <RatingPill rating={dish.rating} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-card border border-border bg-surface p-4 shadow-card">
+          <p className="text-xs font-bold uppercase text-accent">
+            Next best action
+          </p>
+          <h3 className="mt-2 font-display text-xl font-semibold text-ink-primary">
+            Go back for the prawns.
+          </h3>
+          <p className="mt-3 text-sm leading-6 text-ink-secondary">
+            Your highest notes point to seafood, slow dinner plans, and dishes
+            that held up across multiple visits.
+          </p>
+        </section>
+      </aside>
     </section>
   );
 }

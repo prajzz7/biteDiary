@@ -15,14 +15,15 @@ datasource db {
 }
 
 model User {
-  id           String       @id @default(cuid())
+  id           String   @id @default(cuid())
   name         String?
-  email        String       @unique
+  email        String   @unique
   passwordHash String
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  restaurants  Restaurant[]
+  restaurants      Restaurant[]
+  restaurantVisits RestaurantVisit[]
 }
 
 model Restaurant {
@@ -34,13 +35,50 @@ model Restaurant {
   country   String?
   address   String?
   notes     String?
-  rating    Float?
-  visitedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  visits    RestaurantVisit[]
 
   @@index([userId])
+}
+
+model RestaurantVisit {
+  id              String    @id @default(cuid())
+  visitNotes      String?
+  rating          Float?
+  visitedAt       DateTime?
+  totalAmountPaid Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  dishes Dish[]
+
+  @@index([restaurantId])
+  @@index([userId])
+  @@index([visitedAt])
+  @@index([userId, visitedAt])
+  @@index([restaurantId, visitedAt])
+}
+
+model Dish {
+  id            String  @id @default(cuid())
+  name          String
+  rating        Float?
+  price         Float?
+  notes         String?
+  wouldEatAgain Boolean @default(false)
+
+  restaurantVisitId String
+  restaurantVisit   RestaurantVisit @relation(fields: [restaurantVisitId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantVisitId])
 }
