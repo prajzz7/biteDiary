@@ -4,6 +4,14 @@ import prisma from "../src/db/prisma";
 
 import type { Prisma } from "@prisma/client";
 
+import { v2 as cloudinary } from "cloudinary";
+
+import multer from "multer";
+
+import { unlink } from "node:fs/promises";
+
+const upload = multer({ dest: "uploads/" });
+
 const router = Router();
 
 class BadRequestError extends Error {}
@@ -18,6 +26,12 @@ type RestaurantPayload = {
   notes?: string | null;
   rating?: number | string | null;
   visitedAt?: string | Date | null;
+  totalAmountPaid?: number | string | null;
+  dishName?: string | null;
+  dishRating?: number | string | null;
+  dishNotes?: string | null;
+  wouldEatAgain?: boolean | string | null;
+  visitNotes?: string | null;
 };
 
 function errorMessage(error: unknown) {
@@ -68,16 +82,75 @@ function parseOptionalRating(value: RestaurantPayload["rating"]) {
   return rating;
 }
 
+function parseOptionalAmount(value: RestaurantPayload["totalAmountPaid"]) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new BadRequestError("Amount paid must be 0 or greater.");
+  }
+
+  return amount;
+}
+
+function parseOptionalBoolean(value: RestaurantPayload["wouldEatAgain"]) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  throw new BadRequestError("Invalid boolean value.");
+}
+
+function parseOptionalString(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 function getQueryString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-router.post("/", async (req, res) => {
+router.post("/", upload.single("bannerImage"), async (req, res) => {
   try {
     if (!req.user) {
       return res.status(401).json({
         message: "Unauthorized",
       });
+    }
+
+    let bannerImageUrl: string | undefined;
+    let bannerImagePublicId: string | undefined;
+
+    const cloudinaryFolderName =
+      process.env.NODE_ENV === "production" ? "prod" : "dev";
+
+    if (req.file) {
+      const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+        asset_folder: `bite-diary/${cloudinaryFolderName}/restaurants`,
+        public_id: `${req.user.id}-${Date.now()}`,
+      });
+
+      bannerImageUrl = uploadResult.secure_url;
+      bannerImagePublicId = uploadResult.public_id;
+
+      await unlink(req.file.path);
+      console.log("req.file", req.file);
+      console.log("uploadResult", uploadResult);
     }
 
     const {
@@ -88,8 +161,14 @@ router.post("/", async (req, res) => {
       country,
       address,
       notes,
-      // rating,
-      // visitedAt,
+      rating,
+      visitedAt,
+      dishName,
+      dishRating,
+      dishNotes,
+      wouldEatAgain,
+      totalAmountPaid,
+      visitNotes,
     } = req.body as RestaurantPayload;
 
     if (!name) {
@@ -97,8 +176,6 @@ router.post("/", async (req, res) => {
         message: "Restaurant name is required",
       });
     }
-
-    // const parsedRating = parseOptionalRating(rating);
 
     const restaurant = await prisma.restaurant.create({
       data: {
@@ -109,15 +186,54 @@ router.post("/", async (req, res) => {
         country,
         address,
         notes,
-        // rating: parsedRating,
-        // visitedAt: parseOptionalDate(visitedAt),
+        bannerImageUrl,
+        bannerImagePublicId,
         userId: req.user.id,
       },
     });
 
+    const parsedRating = parseOptionalRating(rating);
+    const parsedVisitedAt = parseOptionalDate(visitedAt);
+    const parsedTotalAmountPaid = parseOptionalAmount(totalAmountPaid);
+    const parsedDishRating = parseOptionalRating(dishRating);
+    const parsedWouldEatAgain = parseOptionalBoolean(wouldEatAgain);
+    const parsedDishName = parseOptionalString(dishName);
+    const parsedDishNotes = parseOptionalString(dishNotes);
+
+    const visit = await prisma.restaurantVisit.create({
+      data: {
+        visitNotes,
+        rating: parsedRating,
+        visitedAt: parsedVisitedAt,
+        totalAmountPaid: parsedTotalAmountPaid,
+        restaurantId: restaurant.id,
+        userId: req.user.id,
+      },
+      include: {
+        dishes: true,
+      },
+    });
+
+    if (visit && parsedDishName) {
+      const dish = await prisma.dish.create({
+        data: {
+          name: parsedDishName,
+          rating: parsedDishRating,
+          notes: parsedDishNotes,
+          wouldEatAgain: parsedWouldEatAgain,
+
+          restaurantVisitId: visit.id,
+        },
+      });
+    }
+
     return res.status(201).json({
-      message: "Restaurant created successfully",
-      data: restaurant,
+      message: "Restaurant and first visit created successfully",
+      data: {
+        ...restaurant,
+        bannerImagePublicId,
+        bannerImageUrl,
+      },
     });
   } catch (error) {
     if (error instanceof BadRequestError) {
@@ -133,47 +249,22 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.patch("/:restaurantId", async (req, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({
-        message: "Unauthorized",
-      });
-    }
+router.patch(
+  "/:restaurantId",
+  upload.single("bannerImage"),
+  async (req, res) => {
+    try {
+      if (!req.user) {
+        if (req.file) {
+          await unlink(req.file.path);
+        }
 
-    const {
-      name,
-      cuisine,
-      city,
-      state,
-      country,
-      address,
-      notes,
-      // rating,
-      // visitedAt,
-    } = req.body as RestaurantPayload;
+        return res.status(401).json({
+          message: "Unauthorized",
+        });
+      }
 
-    const existingRestaurant = await prisma.restaurant.findFirst({
-      where: {
-        id: req.params.restaurantId,
-        userId: req.user.id,
-      },
-    });
-
-    if (!existingRestaurant) {
-      return res.status(404).json({
-        message: "Restaurant not found",
-      });
-    }
-
-    // const parsedRating = parseNullableRating(rating);
-    // const parsedVisitedAt = parseNullableDate(visitedAt);
-
-    const restaurant = await prisma.restaurant.update({
-      where: {
-        id: req.params.restaurantId,
-      },
-      data: {
+      const {
         name,
         cuisine,
         city,
@@ -181,28 +272,105 @@ router.patch("/:restaurantId", async (req, res) => {
         country,
         address,
         notes,
-        // rating: parsedRating,
-        // visitedAt: parsedVisitedAt,
-      },
-    });
+        // rating,
+        // visitedAt,
+      } = req.body as RestaurantPayload;
 
-    res.status(200).json({
-      message: "Restaurant updated successfully",
-      data: restaurant,
-    });
-  } catch (error) {
-    if (error instanceof BadRequestError) {
-      return res.status(400).json({
-        message: error.message,
+      if (!name) {
+        if (req.file) {
+          await unlink(req.file.path);
+        }
+
+        return res.status(400).json({
+          message: "Restaurant name is required",
+        });
+      }
+
+      const existingRestaurant = await prisma.restaurant.findFirst({
+        where: {
+          id: req.params.restaurantId,
+          userId: req.user.id,
+        },
+      });
+
+      if (!existingRestaurant) {
+        if (req.file) {
+          await unlink(req.file.path);
+        }
+
+        return res.status(404).json({
+          message: "Restaurant not found",
+        });
+      }
+
+      // const parsedRating = parseNullableRating(rating);
+      // const parsedVisitedAt = parseNullableDate(visitedAt);
+
+      let bannerImageUrl: string | undefined;
+      let bannerImagePublicId: string | undefined;
+
+      const cloudinaryFolderName =
+        process.env.NODE_ENV === "production" ? "prod" : "dev";
+
+      if (req.file) {
+        const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+          asset_folder: `bite-diary/${cloudinaryFolderName}/restaurants`,
+          public_id: `${req.user.id}-${Date.now()}`,
+        });
+
+        bannerImageUrl = uploadResult.secure_url;
+        bannerImagePublicId = uploadResult.public_id;
+
+        await unlink(req.file.path);
+      }
+
+      const restaurant = await prisma.restaurant.update({
+        where: {
+          id: existingRestaurant.id,
+        },
+        data: {
+          name,
+          cuisine,
+          city,
+          state,
+          country,
+          address,
+          notes,
+          ...(bannerImageUrl && bannerImagePublicId
+            ? {
+                bannerImagePublicId,
+                bannerImageUrl,
+              }
+            : {}),
+          // rating: parsedRating,
+          // visitedAt: parsedVisitedAt,
+        },
+      });
+
+      if (bannerImagePublicId && existingRestaurant.bannerImagePublicId) {
+        await cloudinary.uploader.destroy(
+          existingRestaurant.bannerImagePublicId,
+        );
+      }
+
+      res.status(200).json({
+        message: "Restaurant updated successfully",
+        data: restaurant,
+      });
+    } catch (error) {
+      if (error instanceof BadRequestError) {
+        return res.status(400).json({
+          message: error.message,
+        });
+      }
+
+      res.status(500).json({
+        message: "Something went wrong",
+        error: errorMessage(error),
       });
     }
-
-    res.status(500).json({
-      message: "Something went wrong",
-      error: errorMessage(error),
-    });
-  }
-});
+  },
+);
 
 /* GET All Restaurants by Users. */
 router.get("/", async (req, res) => {
@@ -421,6 +589,118 @@ router.delete("/:restaurantId", async (req, res) => {
 
     return res.status(200).json({
       message: "Restaurant deleted successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Something went wrong",
+      error: errorMessage(error),
+    });
+  }
+});
+
+router.get("/:restaurantId/visits", async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const visits = await prisma.restaurantVisit.findMany({
+      where: {
+        restaurantId: req.params.restaurantId,
+        userId: req.user.id,
+      },
+      include: {
+        dishes: true,
+      },
+      orderBy: [{ visitedAt: "desc" }],
+    });
+
+    return res.status(200).json({
+      message: "Successfully fetched all visits",
+      visits,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Something went wrong",
+      error: errorMessage(error),
+    });
+  }
+});
+
+router.post("/:restaurantId/visits", async (req, res) => {
+  const restaurantId = req.params.restaurantId;
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    if (!restaurantId) {
+      return res.status(404).json({
+        message: "Restaurant id is needed.",
+      });
+    }
+
+    const {
+      visitNotes,
+      rating,
+      visitedAt,
+      totalAmountPaid,
+      dishName,
+      dishRating,
+      dishNotes,
+      wouldEatAgain,
+    } = req.body;
+
+    const restaurant = await prisma.restaurant.findFirst({
+      where: {
+        id: restaurantId,
+        userId: req.user?.id,
+      },
+    });
+
+    if (!restaurant) {
+      return res.status(404).json({
+        message: "Restaurant not found",
+      });
+    }
+
+    const visit = await prisma.restaurantVisit.create({
+      data: {
+        visitNotes,
+        rating: parseOptionalRating(rating),
+        visitedAt: parseOptionalDate(visitedAt),
+        totalAmountPaid: parseOptionalAmount(totalAmountPaid),
+        restaurantId,
+        userId: req.user.id,
+      },
+      include: {
+        dishes: true,
+      },
+    });
+
+    const parsedDishName = parseOptionalString(dishName);
+    const parsedDishNotes = parseOptionalString(dishNotes);
+
+    if (visit && parsedDishName) {
+      const dish = await prisma.dish.create({
+        data: {
+          name: parsedDishName,
+          rating: parseOptionalRating(dishRating),
+          notes: parsedDishNotes,
+          wouldEatAgain: parseOptionalBoolean(wouldEatAgain),
+
+          restaurantVisitId: visit.id,
+        },
+      });
+    }
+
+    return res.status(201).json({
+      message: "Visit created successfully",
+      data: visit,
     });
   } catch (error) {
     return res.status(500).json({

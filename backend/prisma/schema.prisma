@@ -34,7 +34,9 @@ model Restaurant {
   state     String?
   country   String?
   address   String?
-  notes     String?
+  notes     String?  
+  bannerImageUrl String?
+  bannerImagePublicId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

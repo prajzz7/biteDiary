@@ -436,7 +436,7 @@ function RestaurantCard({ restaurant }: { restaurant: ApiRestaurant }) {
   const notes =
     restaurant.notes?.trim() ||
     "No notes added yet. Save what stood out on your next visit.";
-  const cuisine = restaurant.cuisine?.trim() || "Cuisine not set";
+  const cuisine = displayText(restaurant.cuisine, "Cuisine not set");
   const rating = restaurant.rating ?? 0;
   const visitedLabel = formatDate(restaurant.visitedAt ?? restaurant.createdAt);
 
@@ -448,6 +448,7 @@ function RestaurantCard({ restaurant }: { restaurant: ApiRestaurant }) {
       <RestaurantImagePlaceholder
         restaurantName={restaurant.name}
         cuisine={cuisine}
+        restaurantBannerUrl={restaurant.bannerImageUrl}
       />
       <div className="min-w-0 p-4">
         <div className="flex items-start justify-between gap-3">
@@ -510,23 +511,26 @@ function RestaurantCard({ restaurant }: { restaurant: ApiRestaurant }) {
 function RestaurantImagePlaceholder({
   cuisine,
   restaurantName,
+  restaurantBannerUrl,
 }: {
   cuisine: string;
   restaurantName: string;
+  restaurantBannerUrl?: string | null;
 }) {
-  const initials = restaurantName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join("");
+  const imageUrl =
+    restaurantBannerUrl ||
+    "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=700&q=80";
 
   return (
-    <div className="relative flex h-full min-h-60 w-full flex-col justify-between overflow-hidden bg-[radial-gradient(circle_at_25%_20%,rgba(201,143,73,0.35),transparent_34%),linear-gradient(145deg,#211d18,#0f0f0f)] p-4">
-      <div className="absolute inset-x-4 top-4 h-px bg-accent/30" />
-      <div className="relative flex h-14 w-14 items-center justify-center rounded-full border border-accent/35 bg-bg/70 font-display text-xl font-semibold text-accent shadow-card">
-        {initials || "BD"}
-      </div>
+    <div
+      style={{
+        backgroundImage: `linear-gradient(180deg,rgba(15,15,15,0.22),rgba(15,15,15,0.82)),url(${imageUrl})`,
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundSize: "cover",
+      }}
+      className="relative flex h-full min-h-60 w-full flex-col justify-end overflow-hidden bg-[radial-gradient(circle_at_25%_20%,rgba(201,143,73,0.35),transparent_34%),linear-gradient(145deg,#211d18,#0f0f0f)] p-4"
+    >
       <div className="relative">
         <p className="text-[11px] font-bold uppercase text-accent">BiteDiary</p>
         <p className="mt-1 line-clamp-2 text-sm font-semibold leading-5 text-ink-primary">
@@ -535,6 +539,16 @@ function RestaurantImagePlaceholder({
       </div>
     </div>
   );
+}
+
+function displayText(value: string | null | undefined, fallback: string) {
+  const trimmed = value?.trim();
+
+  if (!trimmed || trimmed.toLowerCase() === "undefined") {
+    return fallback;
+  }
+
+  return trimmed;
 }
 
 function RestaurantMeta({ label, value }: { label: string; value: string }) {

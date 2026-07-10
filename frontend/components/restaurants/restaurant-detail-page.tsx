@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { z } from "zod";
 import {
@@ -13,10 +13,12 @@ import {
   ChefHat,
   ClipboardPenLine,
   History,
+  ImagePlus,
   LoaderCircle,
   MapPin,
   Navigation,
   Pencil,
+  Plus,
   PlusCircle,
   RefreshCw,
   ReceiptText,
@@ -32,9 +34,32 @@ import {
   ApiError,
   restaurantsApi,
   type Restaurant,
+  type RestaurantVisit,
 } from "@/lib/api/client";
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
 const restaurantSchema = z.object({
+  bannerImage: z
+    .custom<File | undefined>(
+      (file) => {
+        if (file === undefined) {
+          return true;
+        }
+
+        return typeof File !== "undefined" && file instanceof File;
+      },
+      { message: "Choose a valid image file" },
+    )
+    .refine(
+      (file) => !file || file.size <= MAX_FILE_SIZE,
+      "Max file size is 5MB",
+    )
+    .refine(
+      (file) => !file || ACCEPTED_IMAGE_TYPES.includes(file.type),
+      "Only .jpg, .png and .webp formats are supported.",
+    ),
   address: z.string().trim().optional(),
   city: z.string().trim().optional(),
   country: z.string().trim().optional(),
@@ -63,54 +88,70 @@ const restaurantSchema = z.object({
 });
 
 type RestaurantFormValues = z.infer<typeof restaurantSchema>;
+const visitSchema = z.object({
+  rating: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => {
+      if (!value) {
+        return true;
+      }
+
+      const rating = Number(value);
+      return (
+        Number.isFinite(rating) &&
+        rating >= 0 &&
+        rating <= 10 &&
+        Number.isInteger(rating * 2)
+      );
+    }, "Rating must be between 0 and 10 in 0.5 steps"),
+  totalAmountPaid: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => {
+      if (!value) {
+        return true;
+      }
+
+      const amount = Number(value);
+      return Number.isFinite(amount) && amount >= 0;
+    }, "Amount must be 0 or greater"),
+  visitedAt: z.string().optional(),
+  visitNotes: z.string().trim().optional(),
+});
+
+const dishDraftSchema = z.object({
+  name: z.string().trim().min(2, "Dish name is required"),
+  notes: z.string().trim().optional(),
+  rating: z
+    .string()
+    .trim()
+    .optional()
+    .refine((value) => {
+      if (!value) {
+        return true;
+      }
+
+      const rating = Number(value);
+      return (
+        Number.isFinite(rating) &&
+        rating >= 0 &&
+        rating <= 10 &&
+        Number.isInteger(rating * 2)
+      );
+    }, "Rating must be between 0 and 10 in 0.5 steps"),
+  wouldEatAgain: z.boolean().default(false),
+});
+
+type VisitFormValues = z.infer<typeof visitSchema>;
+type DishDraftFormValues = z.infer<typeof dishDraftSchema>;
 type DetailView = "loading" | "ready" | "error" | "not-found";
+type VisitsView = "loading" | "ready" | "empty" | "error";
 type MutationStatus = "idle" | "loading" | "success" | "error";
 
 const quickRatings = [10, 9.5, 9, 8.5, 8, 7.5];
-const mockVisitHistory = [
-  {
-    date: "18 Jun 2026",
-    dishes: ["Butter Garlic Prawns", "Poi", "Bebinca"],
-    mood: "Dinner",
-    notes: "Seafood was excellent again. Worth booking for a slow dinner.",
-    rating: 9.5,
-    spend: "Rs. 3,200",
-  },
-  {
-    date: "02 May 2026",
-    dishes: ["Prawn Balchao", "Chorizo Pao"],
-    mood: "Friends",
-    notes: "Great energy, slightly loud, food still memorable.",
-    rating: 8.5,
-    spend: "Rs. 2,750",
-  },
-  {
-    date: "14 Mar 2026",
-    dishes: ["Crab Xec Xec", "Serradura"],
-    mood: "First visit",
-    notes: "First saved visit. Add dishes here once the visit table exists.",
-    rating: 9,
-    spend: "Rs. 2,400",
-  },
-];
-
-const mockVisitDishes = [
-  {
-    name: "Butter Garlic Prawns",
-    note: "Would reorder",
-    rating: 9.5,
-  },
-  {
-    name: "Crab Xec Xec",
-    note: "Best with poi",
-    rating: 9,
-  },
-  {
-    name: "Bebinca",
-    note: "Share next time",
-    rating: 8,
-  },
-];
 
 export default function RestaurantDetailPage({
   restaurantId,
@@ -119,12 +160,16 @@ export default function RestaurantDetailPage({
 }) {
   const router = useRouter();
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [visits, setVisits] = useState<RestaurantVisit[]>([]);
   const [view, setView] = useState<DetailView>("loading");
+  const [visitsView, setVisitsView] = useState<VisitsView>("loading");
   const [isEditing, setIsEditing] = useState(false);
-  const [mutationStatus, setMutationStatus] =
-    useState<MutationStatus>("idle");
+  const [mutationStatus, setMutationStatus] = useState<MutationStatus>("idle");
+  const [visitStatus, setVisitStatus] = useState<MutationStatus>("idle");
   const [statusMessage, setStatusMessage] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showVisitDialog, setShowVisitDialog] = useState(false);
+  const [bannerInputVersion, setBannerInputVersion] = useState(0);
 
   const {
     clearErrors,
@@ -140,7 +185,23 @@ export default function RestaurantDetailPage({
   });
 
   const selectedRating = Number(watch("rating") || 0);
+  const selectedBannerImage = watch("bannerImage");
   const isMutating = mutationStatus === "loading";
+  const bannerImagePreviewUrl = useMemo(() => {
+    if (!selectedBannerImage) {
+      return null;
+    }
+
+    return URL.createObjectURL(selectedBannerImage);
+  }, [selectedBannerImage]);
+
+  useEffect(() => {
+    return () => {
+      if (bannerImagePreviewUrl) {
+        URL.revokeObjectURL(bannerImagePreviewUrl);
+      }
+    };
+  }, [bannerImagePreviewUrl]);
 
   async function loadRestaurant() {
     setView("loading");
@@ -161,9 +222,47 @@ export default function RestaurantDetailPage({
     }
   }
 
+  async function loadVisits() {
+    setVisitsView("loading");
+
+    try {
+      const response = await restaurantsApi.listVisits(restaurantId);
+      setVisits(response.visits);
+      setVisitsView(response.visits.length > 0 ? "ready" : "empty");
+    } catch (error) {
+      setVisitsView("error");
+    }
+  }
+
   useEffect(() => {
     void loadRestaurant();
+    void loadVisits();
   }, [restaurantId]);
+
+  async function createVisit(
+    values: VisitFormValues,
+    dishDrafts: DishDraftFormValues[],
+  ) {
+    setVisitStatus("loading");
+    setStatusMessage("");
+
+    try {
+      const response = await restaurantsApi.createVisit(
+        restaurantId,
+        toCreateVisitPayload(values, dishDrafts),
+      );
+
+      setVisits((current) => [response.data, ...current]);
+      setVisitsView("ready");
+      setVisitStatus("success");
+      setShowVisitDialog(false);
+      setStatusMessage("Visit logged.");
+      void loadVisits();
+    } catch (error) {
+      setVisitStatus("error");
+      throw error;
+    }
+  }
 
   async function onSubmit(values: RestaurantFormValues) {
     clearErrors();
@@ -196,6 +295,7 @@ export default function RestaurantDetailPage({
 
       setRestaurant(response.data);
       reset(toFormValues(response.data));
+      setBannerInputVersion((version) => version + 1);
       setIsEditing(false);
       setMutationStatus("success");
       setStatusMessage("Restaurant updated.");
@@ -231,12 +331,21 @@ export default function RestaurantDetailPage({
   function cancelEdit() {
     if (restaurant) {
       reset(toFormValues(restaurant));
+      setBannerInputVersion((version) => version + 1);
     }
 
     clearErrors();
     setIsEditing(false);
     setMutationStatus("idle");
     setStatusMessage("");
+  }
+
+  function clearSelectedBannerImage() {
+    setValue("bannerImage", undefined, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setBannerInputVersion((version) => version + 1);
   }
 
   return (
@@ -264,8 +373,12 @@ export default function RestaurantDetailPage({
                   <EditForm
                     errors={errors}
                     handleSubmit={handleSubmit}
+                    currentBannerImageUrl={restaurant.bannerImageUrl ?? null}
+                    bannerInputVersion={bannerInputVersion}
+                    bannerPreviewUrl={bannerImagePreviewUrl}
                     isMutating={isMutating}
                     onCancel={cancelEdit}
+                    onClearBannerImage={clearSelectedBannerImage}
                     onSubmit={onSubmit}
                     register={register}
                     selectedRating={selectedRating}
@@ -274,7 +387,12 @@ export default function RestaurantDetailPage({
                 ) : (
                   <>
                     <ReadDetails restaurant={restaurant} />
-                    <VisitHistorySection />
+                    <VisitHistorySection
+                      visits={visits}
+                      visitsView={visitsView}
+                      onLogVisit={() => setShowVisitDialog(true)}
+                      onRetry={loadVisits}
+                    />
                   </>
                 )}
               </div>
@@ -301,6 +419,18 @@ export default function RestaurantDetailPage({
             onConfirm={deleteRestaurant}
           />
         ) : null}
+
+        {showVisitDialog && restaurant ? (
+          <LogVisitDialog
+            isSaving={visitStatus === "loading"}
+            restaurantName={restaurant.name}
+            onCancel={() => {
+              setShowVisitDialog(false);
+              setVisitStatus("idle");
+            }}
+            onSubmit={createVisit}
+          />
+        ) : null}
       </main>
     </AppShell>
   );
@@ -308,6 +438,7 @@ export default function RestaurantDetailPage({
 
 const emptyFormValues: RestaurantFormValues = {
   address: "",
+  bannerImage: undefined,
   city: "",
   country: "",
   cuisine: "",
@@ -321,6 +452,7 @@ const emptyFormValues: RestaurantFormValues = {
 function toFormValues(restaurant: Restaurant): RestaurantFormValues {
   return {
     address: restaurant.address ?? "",
+    bannerImage: undefined,
     city: restaurant.city ?? "",
     country: restaurant.country ?? "",
     cuisine: restaurant.cuisine ?? "",
@@ -338,6 +470,7 @@ function toFormValues(restaurant: Restaurant): RestaurantFormValues {
 function toUpdateRestaurantPayload(values: RestaurantFormValues) {
   return {
     address: nullableString(values.address),
+    bannerImage: values.bannerImage,
     city: nullableString(values.city),
     country: nullableString(values.country),
     cuisine: nullableString(values.cuisine),
@@ -347,6 +480,31 @@ function toUpdateRestaurantPayload(values: RestaurantFormValues) {
     state: nullableString(values.state),
     visitedAt: values.visitedAt || null,
   };
+}
+
+function toCreateVisitPayload(
+  values: VisitFormValues,
+  dishDrafts: DishDraftFormValues[],
+) {
+  const firstDish = dishDrafts[0];
+
+  return {
+    dishName: optionalString(firstDish?.name),
+    dishNotes: optionalString(firstDish?.notes),
+    dishRating: firstDish?.rating ? Number(firstDish.rating) : undefined,
+    rating: values.rating ? Number(values.rating) : undefined,
+    totalAmountPaid: values.totalAmountPaid
+      ? Number(values.totalAmountPaid)
+      : undefined,
+    visitedAt: values.visitedAt || undefined,
+    visitNotes: optionalString(values.visitNotes),
+    wouldEatAgain: firstDish?.wouldEatAgain,
+  };
+}
+
+function optionalString(value?: string) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 function nullableString(value?: string) {
@@ -373,7 +531,11 @@ function HeroCard({ restaurant }: { restaurant: Restaurant }) {
         <img
           alt="Warm restaurant table"
           className="absolute inset-0 h-full w-full object-cover opacity-45 mix-blend-screen"
-          src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80"
+          src={
+            restaurant?.bannerImageUrl
+              ? restaurant?.bannerImageUrl
+              : "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80"
+          }
         />
         <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/60 to-transparent" />
         <div className="relative flex min-h-[280px] flex-col justify-end p-5 sm:p-6">
@@ -431,7 +593,22 @@ function ReadDetails({ restaurant }: { restaurant: Restaurant }) {
   );
 }
 
-function VisitHistorySection() {
+function VisitHistorySection({
+  onLogVisit,
+  onRetry,
+  visits,
+  visitsView,
+}: {
+  onLogVisit: () => void;
+  onRetry: () => void;
+  visits: RestaurantVisit[];
+  visitsView: VisitsView;
+}) {
+  const reorderDishes = visits
+    .flatMap((visit) => visit.dishes)
+    .filter((dish) => dish.wouldEatAgain)
+    .slice(0, 4);
+
   return (
     <section
       className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]"
@@ -454,56 +631,29 @@ function VisitHistorySection() {
           <button
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-success/30 bg-success/10 px-4 text-sm font-bold text-success transition hover:bg-success/15 focus:outline-none focus:ring-4 focus:ring-accent-soft"
             type="button"
+            onClick={onLogVisit}
           >
             <PlusCircle aria-hidden="true" size={17} />
             Log revisit
           </button>
         </div>
 
-        <div className="mt-5 space-y-4">
-          {mockVisitHistory.map((visit, index) => (
-            <article
-              className="relative rounded-card border border-border bg-bg p-4"
-              key={`${visit.date}-${visit.mood}`}
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-accent/30 bg-accent-soft px-3 py-1 text-xs font-bold text-accent">
-                      Visit {mockVisitHistory.length - index}
-                    </span>
-                    <span className="text-sm font-bold text-ink-primary">
-                      {visit.date}
-                    </span>
-                    <span className="text-sm font-semibold text-ink-tertiary">
-                      {visit.mood}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-ink-secondary">
-                    {visit.notes}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <RatingPill rating={visit.rating} />
-                  <span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold text-ink-secondary">
-                    {visit.spend}
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {visit.dishes.map((dish) => (
-                  <span
-                    className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold text-ink-secondary"
-                    key={dish}
-                  >
-                    {dish}
-                  </span>
-                ))}
-              </div>
-            </article>
-          ))}
-        </div>
+        {visitsView === "loading" ? <VisitsLoadingState /> : null}
+        {visitsView === "error" ? <VisitsErrorState onRetry={onRetry} /> : null}
+        {visitsView === "empty" ? (
+          <VisitsEmptyState onLogVisit={onLogVisit} />
+        ) : null}
+        {visitsView === "ready" ? (
+          <div className="mt-5 space-y-4">
+            {visits.map((visit, index) => (
+              <VisitCard
+                index={visits.length - index}
+                key={visit.id}
+                visit={visit}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <aside className="space-y-4">
@@ -513,24 +663,30 @@ function VisitHistorySection() {
             Reorder notes
           </p>
           <div className="mt-4 space-y-3">
-            {mockVisitDishes.map((dish) => (
-              <div
-                className="rounded-control border border-success/20 bg-bg/70 p-3"
-                key={dish.name}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-display text-lg font-semibold text-ink-primary">
-                      {dish.name}
-                    </p>
-                    <p className="mt-1 text-xs font-bold text-success">
-                      {dish.note}
-                    </p>
+            {reorderDishes.length > 0 ? (
+              reorderDishes.map((dish) => (
+                <div
+                  className="rounded-control border border-success/20 bg-bg/70 p-3"
+                  key={dish.id}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-display text-lg font-semibold text-ink-primary">
+                        {dish.name}
+                      </p>
+                      <p className="mt-1 text-xs font-bold text-success">
+                        Would eat again
+                      </p>
+                    </div>
+                    <RatingPill rating={dish.rating} />
                   </div>
-                  <RatingPill rating={dish.rating} />
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="rounded-control border border-success/20 bg-bg/70 p-3 text-sm leading-6 text-ink-secondary">
+                Mark dishes as worth eating again when you log visits.
+              </p>
+            )}
           </div>
         </section>
 
@@ -551,20 +707,154 @@ function VisitHistorySection() {
   );
 }
 
+function VisitCard({
+  index,
+  visit,
+}: {
+  index: number;
+  visit: RestaurantVisit;
+}) {
+  return (
+    <article className="relative rounded-card border border-border bg-bg p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-accent/30 bg-accent-soft px-3 py-1 text-xs font-bold text-accent">
+              Visit {index}
+            </span>
+            <span className="text-sm font-bold text-ink-primary">
+              {formatDate(visit.visitedAt ?? visit.createdAt)}
+            </span>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-ink-secondary">
+            {visit.visitNotes || "No notes saved for this visit yet."}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <RatingPill rating={visit.rating} />
+          {visit.totalAmountPaid !== undefined &&
+          visit.totalAmountPaid !== null ? (
+            <span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold text-ink-secondary">
+              {formatCurrency(visit.totalAmountPaid)}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {visit.dishes.length > 0 ? (
+          visit.dishes.map((dish) => (
+            <span
+              className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold text-ink-secondary"
+              key={dish.id}
+            >
+              {dish.name}
+            </span>
+          ))
+        ) : (
+          <span className="rounded-full border border-dashed border-border bg-surface px-3 py-1 text-xs font-bold text-ink-tertiary">
+            Add dishes later
+          </span>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function VisitsLoadingState() {
+  return (
+    <div className="mt-5 space-y-4">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          className="rounded-card border border-border bg-bg p-4"
+          key={index}
+        >
+          <div className="h-7 w-28 rounded-full bg-surface" />
+          <div className="mt-4 h-3 w-full rounded-full bg-surface" />
+          <div className="mt-2 h-3 w-2/3 rounded-full bg-surface" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function VisitsEmptyState({ onLogVisit }: { onLogVisit: () => void }) {
+  return (
+    <div className="mt-5 rounded-card border border-dashed border-border bg-bg p-6 text-center">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-border bg-surface text-ink-tertiary">
+        <History aria-hidden="true" size={24} />
+      </div>
+      <h3 className="mt-4 font-display text-xl font-semibold text-ink-primary">
+        No visits logged yet
+      </h3>
+      <p className="mt-2 text-sm leading-6 text-ink-secondary">
+        Start the timeline with your latest visit, rating, spend, and dishes.
+      </p>
+      <button
+        className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-4 text-sm font-bold text-bg transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        type="button"
+        onClick={onLogVisit}
+      >
+        <PlusCircle aria-hidden="true" size={17} />
+        Log first visit
+      </button>
+    </div>
+  );
+}
+
+function VisitsErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="mt-5 rounded-card border border-error/30 bg-error/10 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <AlertCircle
+            aria-hidden="true"
+            className="mt-0.5 shrink-0 text-error"
+            size={18}
+          />
+          <p className="text-sm font-semibold text-error">
+            Could not load visits.
+          </p>
+        </div>
+        <button
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-error/30 bg-surface px-4 text-sm font-bold text-error"
+          type="button"
+          onClick={onRetry}
+        >
+          <RefreshCw aria-hidden="true" size={16} />
+          Retry
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function EditForm({
+  bannerInputVersion,
+  bannerPreviewUrl,
+  currentBannerImageUrl,
   errors,
   handleSubmit,
   isMutating,
   onCancel,
+  onClearBannerImage,
   onSubmit,
   register,
   selectedRating,
   setValue,
 }: {
-  errors: ReturnType<typeof useForm<RestaurantFormValues>>["formState"]["errors"];
-  handleSubmit: ReturnType<typeof useForm<RestaurantFormValues>>["handleSubmit"];
+  bannerInputVersion: number;
+  bannerPreviewUrl: string | null;
+  currentBannerImageUrl: string | null;
+  errors: ReturnType<
+    typeof useForm<RestaurantFormValues>
+  >["formState"]["errors"];
+  handleSubmit: ReturnType<
+    typeof useForm<RestaurantFormValues>
+  >["handleSubmit"];
   isMutating: boolean;
   onCancel: () => void;
+  onClearBannerImage: () => void;
   onSubmit: (values: RestaurantFormValues) => void;
   register: ReturnType<typeof useForm<RestaurantFormValues>>["register"];
   selectedRating: number;
@@ -594,6 +884,20 @@ function EditForm({
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <BannerImageField
+          currentImageUrl={currentBannerImageUrl}
+          error={errors.bannerImage?.message}
+          inputVersion={bannerInputVersion}
+          previewUrl={bannerPreviewUrl}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            setValue("bannerImage", file, {
+              shouldDirty: true,
+              shouldValidate: true,
+            });
+          }}
+          onClear={onClearBannerImage}
+        />
         <Field
           error={errors.name?.message}
           icon={Utensils}
@@ -674,7 +978,11 @@ function EditForm({
       >
         {isMutating ? (
           <>
-            <LoaderCircle aria-hidden="true" className="animate-spin" size={18} />
+            <LoaderCircle
+              aria-hidden="true"
+              className="animate-spin"
+              size={18}
+            />
             Saving changes
           </>
         ) : (
@@ -685,6 +993,107 @@ function EditForm({
         )}
       </button>
     </form>
+  );
+}
+
+function BannerImageField({
+  currentImageUrl,
+  error,
+  inputVersion,
+  onChange,
+  onClear,
+  previewUrl,
+}: {
+  currentImageUrl: string | null;
+  error?: string;
+  inputVersion: number;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onClear: () => void;
+  previewUrl: string | null;
+}) {
+  const errorId = "bannerImage-error";
+  const visibleImageUrl = previewUrl ?? currentImageUrl;
+  const hasSelectedImage = Boolean(previewUrl);
+
+  return (
+    <section className="lg:col-span-2">
+      <div className="flex items-center justify-between gap-3">
+        <label className="text-sm font-bold text-ink-primary" htmlFor="bannerImage">
+          Banner image
+        </label>
+        {hasSelectedImage ? (
+          <button
+            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-error/30 bg-error/10 px-3 text-xs font-bold text-error transition hover:border-error focus:outline-none focus:ring-4 focus:ring-error/20"
+            type="button"
+            onClick={onClear}
+          >
+            <Trash2 aria-hidden="true" size={14} />
+            Remove selected image
+          </button>
+        ) : null}
+      </div>
+
+      <label
+        className="mt-2 flex min-h-52 cursor-pointer overflow-hidden rounded-card border border-dashed border-accent/35 bg-surface-sunken transition hover:border-accent/70 focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft"
+        htmlFor="bannerImage"
+      >
+        {visibleImageUrl ? (
+          <span className="relative block h-52 w-full">
+            <img
+              alt={
+                hasSelectedImage
+                  ? "Selected restaurant banner preview"
+                  : "Current restaurant banner"
+              }
+              className="h-full w-full object-cover"
+              src={visibleImageUrl}
+            />
+            <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-bg via-bg/75 to-transparent p-4">
+              <span>
+                <span className="block text-xs font-bold uppercase text-accent">
+                  {hasSelectedImage ? "New banner selected" : "Current banner"}
+                </span>
+                <span className="mt-1 block text-sm font-semibold text-ink-primary">
+                  Click to choose another image
+                </span>
+              </span>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/30 bg-accent-soft text-accent">
+                <ImagePlus aria-hidden="true" size={18} />
+              </span>
+            </span>
+          </span>
+        ) : (
+          <span className="flex w-full flex-col items-center justify-center gap-3 px-4 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full border border-accent/30 bg-accent-soft text-accent">
+              <ImagePlus aria-hidden="true" size={22} />
+            </span>
+            <span>
+              <span className="block text-sm font-bold text-ink-primary">
+                Add a restaurant banner
+              </span>
+              <span className="mt-1 block text-xs font-semibold text-ink-tertiary">
+                JPG, PNG, or WEBP up to 5MB
+              </span>
+            </span>
+          </span>
+        )}
+        <input
+          accept={ACCEPTED_IMAGE_TYPES.join(",")}
+          aria-describedby={error ? errorId : undefined}
+          aria-invalid={Boolean(error)}
+          className="sr-only"
+          id="bannerImage"
+          key={inputVersion}
+          onChange={onChange}
+          type="file"
+        />
+      </label>
+      {error ? (
+        <p className="mt-2 text-sm font-semibold text-error" id={errorId}>
+          {error}
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -783,7 +1192,11 @@ function DeleteDialog({
             onClick={onConfirm}
           >
             {isDeleting ? (
-              <LoaderCircle aria-hidden="true" className="animate-spin" size={18} />
+              <LoaderCircle
+                aria-hidden="true"
+                className="animate-spin"
+                size={18}
+              />
             ) : (
               <Trash2 aria-hidden="true" size={18} />
             )}
@@ -791,6 +1204,470 @@ function DeleteDialog({
           </button>
         </div>
       </section>
+    </div>
+  );
+}
+
+function LogVisitDialog({
+  isSaving,
+  onCancel,
+  onSubmit,
+  restaurantName,
+}: {
+  isSaving: boolean;
+  onCancel: () => void;
+  onSubmit: (
+    values: VisitFormValues,
+    dishDrafts: DishDraftFormValues[],
+  ) => Promise<void>;
+  restaurantName: string;
+}) {
+  const [dishDrafts, setDishDrafts] = useState<DishDraftFormValues[]>([]);
+  const [dialogError, setDialogError] = useState("");
+
+  const {
+    clearErrors,
+    formState: { errors },
+    handleSubmit,
+    register,
+    setError,
+    setValue,
+    watch,
+  } = useForm<VisitFormValues>({
+    defaultValues: {
+      rating: "",
+      totalAmountPaid: "",
+      visitedAt: new Date().toISOString().slice(0, 10),
+      visitNotes: "",
+    },
+  });
+
+  const {
+    formState: { errors: dishErrors },
+    getValues: getDishValues,
+    register: registerDish,
+    reset: resetDish,
+    setError: setDishError,
+  } = useForm<DishDraftFormValues>({
+    defaultValues: {
+      name: "",
+      notes: "",
+      rating: "",
+      wouldEatAgain: true,
+    },
+  });
+
+  const selectedRating = Number(watch("rating") || 0);
+
+  function addDishDraft() {
+    const parsed = dishDraftSchema.safeParse(getDishValues());
+
+    if (!parsed.success) {
+      parsed.error.issues.forEach((issue) => {
+        const field = issue.path[0];
+
+        if (typeof field === "string") {
+          setDishError(field as keyof DishDraftFormValues, {
+            message: issue.message,
+            type: "manual",
+          });
+        }
+      });
+      return;
+    }
+
+    setDishDrafts((current) => [...current, parsed.data]);
+    resetDish({
+      name: "",
+      notes: "",
+      rating: "",
+      wouldEatAgain: true,
+    });
+  }
+
+  async function submitVisit(values: VisitFormValues) {
+    clearErrors();
+    setDialogError("");
+
+    const parsed = visitSchema.safeParse(values);
+
+    if (!parsed.success) {
+      parsed.error.issues.forEach((issue) => {
+        const field = issue.path[0];
+
+        if (typeof field === "string") {
+          setError(field as keyof VisitFormValues, {
+            message: issue.message,
+            type: "manual",
+          });
+        }
+      });
+      return;
+    }
+
+    try {
+      await onSubmit(parsed.data, dishDrafts);
+    } catch (error) {
+      setDialogError(
+        error instanceof ApiError ? error.message : "Unable to log visit.",
+      );
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-bg/75 p-4 backdrop-blur sm:items-center">
+      <section
+        aria-modal="true"
+        className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-card border border-border bg-surface shadow-raised"
+        role="dialog"
+      >
+        <div className="relative overflow-hidden border-b border-border p-5 sm:p-6">
+          <img
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-20"
+            src="https://images.unsplash.com/photo-1559329007-40df8a9345d8?auto=format&fit=crop&w=1200&q=80"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/90 to-bg/40" />
+          <div className="relative flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase text-success">
+                Log revisit
+              </p>
+              <h2 className="mt-2 font-display text-3xl font-semibold leading-tight text-ink-primary">
+                {restaurantName}
+              </h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-ink-secondary">
+                Save the date, rating, spend, and dishes while the meal is
+                fresh.
+              </p>
+            </div>
+            <button
+              aria-label="Close log visit dialog"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-bg/80 text-ink-primary transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+              type="button"
+              onClick={onCancel}
+            >
+              <X aria-hidden="true" size={18} />
+            </button>
+          </div>
+        </div>
+
+        <form
+          className="p-5 sm:p-6"
+          noValidate
+          onSubmit={handleSubmit(submitVisit)}
+        >
+          {dialogError ? (
+            <div
+              className="mb-5 flex items-start gap-3 rounded-control border border-error/30 bg-error/10 p-4 text-sm font-semibold text-error"
+              role="alert"
+            >
+              <AlertCircle aria-hidden="true" className="mt-0.5" size={18} />
+              {dialogError}
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <VisitRatingField
+              error={errors.rating?.message}
+              register={register("rating")}
+              selectedRating={selectedRating}
+              setValue={setValue}
+            />
+            <VisitField
+              error={errors.visitedAt?.message}
+              icon={CalendarDays}
+              id="visitedAt"
+              label="Visited date"
+              register={register("visitedAt")}
+              type="date"
+            />
+            <VisitField
+              error={errors.totalAmountPaid?.message}
+              icon={ReceiptText}
+              id="totalAmountPaid"
+              label="Total spend"
+              placeholder="3200"
+              register={register("totalAmountPaid")}
+              type="number"
+            />
+            <div className="lg:row-span-2">
+              <label
+                className="text-sm font-bold text-ink-primary"
+                htmlFor="visitNotes"
+              >
+                Visit notes
+              </label>
+              <div className="mt-2 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+                <textarea
+                  className="min-h-[132px] w-full resize-y border-0 bg-transparent py-3 text-base leading-6 text-ink-primary outline-none placeholder:text-ink-tertiary"
+                  id="visitNotes"
+                  placeholder="What should future you remember?"
+                  {...register("visitNotes")}
+                />
+              </div>
+            </div>
+          </div>
+
+          <section className="mt-6 rounded-card border border-border bg-bg p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="flex items-center gap-2 text-xs font-bold uppercase text-accent">
+                  <ReceiptText aria-hidden="true" size={16} />
+                  Dishes
+                </p>
+                <h3 className="mt-1 font-display text-xl font-semibold text-ink-primary">
+                  Add what you ate
+                </h3>
+              </div>
+              {dishDrafts.length > 0 ? (
+                <span className="w-fit rounded-full border border-success/25 bg-success/10 px-3 py-1 text-xs font-bold text-success">
+                  {dishDrafts.length} staged
+                </span>
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_110px]">
+              <VisitField
+                error={dishErrors.name?.message}
+                icon={Utensils}
+                id="name"
+                label="Dish name"
+                placeholder="Butter Garlic Prawns"
+                register={registerDish("name")}
+              />
+              <VisitField
+                error={dishErrors.rating?.message}
+                icon={Star}
+                id="rating"
+                label="Rating"
+                placeholder="9.5"
+                register={registerDish("rating")}
+                type="number"
+              />
+              <div className="lg:col-span-2">
+                <label
+                  className="text-sm font-bold text-ink-primary"
+                  htmlFor="dishNotes"
+                >
+                  Dish notes
+                </label>
+                <div className="mt-2 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+                  <input
+                    className="min-w-0 flex-1 border-0 bg-transparent py-3 text-base text-ink-primary outline-none placeholder:text-ink-tertiary"
+                    id="dishNotes"
+                    placeholder="Would reorder, spicy, share next time..."
+                    type="text"
+                    {...registerDish("notes")}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex min-h-11 items-center gap-3 rounded-full border border-success/25 bg-success/10 px-4 text-sm font-bold text-success">
+                <input
+                  className="h-4 w-4 accent-current"
+                  type="checkbox"
+                  {...registerDish("wouldEatAgain")}
+                />
+                Would eat again
+              </label>
+              <button
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-4 text-sm font-bold text-accent transition hover:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+                type="button"
+                onClick={addDishDraft}
+              >
+                <Plus aria-hidden="true" size={17} />
+                Add dish
+              </button>
+            </div>
+
+            {dishDrafts.length > 0 ? (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {dishDrafts.map((dish, index) => (
+                  <div
+                    className="rounded-control border border-border bg-surface p-3"
+                    key={`${dish.name}-${index}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-display text-lg font-semibold text-ink-primary">
+                          {dish.name}
+                        </p>
+                        <p className="mt-1 truncate text-xs font-bold text-success">
+                          {dish.wouldEatAgain
+                            ? "Would eat again"
+                            : "One-time order"}
+                        </p>
+                      </div>
+                      <RatingPill
+                        rating={dish.rating ? Number(dish.rating) : null}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-[1fr_1.4fr]">
+            <button
+              className="min-h-12 rounded-control border border-border bg-bg px-4 text-sm font-bold text-ink-primary transition hover:border-accent/50 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+              disabled={isSaving}
+              type="button"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+            <button
+              className="flex min-h-12 items-center justify-center gap-2 rounded-control bg-accent px-5 py-3 text-base font-bold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-wait disabled:opacity-70"
+              disabled={isSaving}
+              type="submit"
+            >
+              {isSaving ? (
+                <>
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="animate-spin"
+                    size={18}
+                  />
+                  Saving visit
+                </>
+              ) : (
+                <>
+                  <Save aria-hidden="true" size={18} />
+                  Save visit
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function VisitRatingField({
+  error,
+  register,
+  selectedRating,
+  setValue,
+}: {
+  error?: string;
+  register: UseFormRegisterReturn;
+  selectedRating: number;
+  setValue: ReturnType<typeof useForm<VisitFormValues>>["setValue"];
+}) {
+  return (
+    <div>
+      <label
+        className="text-sm font-bold text-ink-primary"
+        htmlFor="visitRating"
+      >
+        Visit rating
+      </label>
+      <div className="mt-2 rounded-control border border-border bg-surface-sunken p-3 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-display text-3xl font-semibold text-ink-primary">
+            {selectedRating > 0 ? selectedRating.toFixed(1) : "0.0"}
+            <span className="ml-1 text-base font-bold text-ink-secondary">
+              /10
+            </span>
+          </p>
+          <input
+            className="h-11 w-20 rounded-control border border-border bg-bg px-3 text-center text-base font-bold text-ink-primary outline-none focus:border-accent"
+            id="visitRating"
+            inputMode="decimal"
+            max="10"
+            min="0"
+            placeholder="8.5"
+            step="0.5"
+            type="number"
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "visit-rating-error" : undefined}
+            {...register}
+          />
+        </div>
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {quickRatings.map((rating) => (
+            <button
+              className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
+                selectedRating === rating
+                  ? "border-accent/40 bg-accent-soft text-accent"
+                  : "border-border bg-bg text-ink-secondary hover:border-accent/40 hover:text-ink-primary"
+              }`}
+              key={rating}
+              type="button"
+              onClick={() =>
+                setValue("rating", String(rating), {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                })
+              }
+            >
+              {rating.toFixed(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+      {error ? (
+        <p
+          className="mt-2 text-sm font-semibold text-error"
+          id="visit-rating-error"
+        >
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function VisitField({
+  error,
+  icon: Icon,
+  id,
+  label,
+  placeholder,
+  register,
+  type = "text",
+}: {
+  error?: string;
+  icon: LucideIcon;
+  id: string;
+  label: string;
+  placeholder?: string;
+  register: UseFormRegisterReturn;
+  type?: string;
+}) {
+  const errorId = `${id}-error`;
+
+  return (
+    <div>
+      <label className="text-sm font-bold text-ink-primary" htmlFor={id}>
+        {label}
+      </label>
+      <div className="mt-2 flex min-h-12 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+        <Icon
+          aria-hidden="true"
+          className="shrink-0 text-ink-secondary"
+          size={19}
+        />
+        <input
+          className="min-w-0 flex-1 border-0 bg-transparent py-3 text-base text-ink-primary outline-none placeholder:text-ink-tertiary"
+          id={id}
+          placeholder={placeholder}
+          type={type}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+          {...register}
+        />
+      </div>
+      {error ? (
+        <p className="mt-2 text-sm font-semibold text-error" id={errorId}>
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -986,7 +1863,11 @@ function StatusMessage({
         className="flex items-start gap-3 rounded-control border border-success/30 bg-success/10 p-4 text-sm font-semibold text-success"
         role="status"
       >
-        <CheckCircle2 aria-hidden="true" className="mt-0.5 shrink-0" size={18} />
+        <CheckCircle2
+          aria-hidden="true"
+          className="mt-0.5 shrink-0"
+          size={18}
+        />
         {message}
       </div>
     );
@@ -1101,4 +1982,12 @@ function formatDate(value?: string | null) {
     month: "short",
     year: "numeric",
   }).format(date);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    currency: "INR",
+    maximumFractionDigits: 0,
+    style: "currency",
+  }).format(value);
 }

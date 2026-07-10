@@ -13,9 +13,18 @@ import restaurantsRouter from "./routes/restaurants";
 import authRouter from "./routes/auth";
 import authMiddleware from "./middleware/authMiddleware";
 
+import { v2 as cloudinary } from "cloudinary";
+
 const app = express();
 
 app.set("trust proxy", 1);
+
+// Configuration
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 // view engine setup
 app.set("views", path.join(process.cwd(), "views"));

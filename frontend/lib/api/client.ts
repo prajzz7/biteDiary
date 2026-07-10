@@ -26,6 +26,31 @@ export type Restaurant = {
   updatedAt: string;
   userId: string;
   visitedAt?: string | null;
+  bannerImageUrl?: string | null;
+  bannerImagePublicId?: string | null;
+};
+
+export type Dish = {
+  id: string;
+  name: string;
+  notes?: string | null;
+  price?: number | null;
+  rating?: number | null;
+  restaurantVisitId: string;
+  wouldEatAgain: boolean;
+};
+
+export type RestaurantVisit = {
+  createdAt: string;
+  dishes: Dish[];
+  id: string;
+  rating?: number | null;
+  restaurantId: string;
+  totalAmountPaid?: number | null;
+  updatedAt: string;
+  userId: string;
+  visitedAt?: string | null;
+  visitNotes?: string | null;
 };
 
 export type RestaurantFilterOptions = {
@@ -35,18 +60,26 @@ export type RestaurantFilterOptions = {
 
 export type CreateRestaurantPayload = {
   address?: string;
+  bannerImage?: File;
   city?: string;
   country?: string;
   cuisine?: string;
+  dishName?: string;
+  dishNotes?: string;
+  dishRating?: number;
   name: string;
   notes?: string;
   rating?: number;
   state?: string;
+  totalAmountPaid?: number;
   visitedAt?: string;
+  visitNotes?: string;
+  wouldEatAgain?: boolean;
 };
 
 export type UpdateRestaurantPayload = {
   address?: string | null;
+  bannerImage?: File;
   city?: string | null;
   country?: string | null;
   cuisine?: string | null;
@@ -55,6 +88,17 @@ export type UpdateRestaurantPayload = {
   rating?: number | null;
   state?: string | null;
   visitedAt?: string | null;
+};
+
+export type CreateRestaurantVisitPayload = {
+  dishName?: string;
+  dishNotes?: string;
+  dishRating?: number;
+  rating?: number;
+  totalAmountPaid?: number;
+  visitedAt?: string;
+  visitNotes?: string;
+  wouldEatAgain?: boolean;
 };
 
 export class ApiError extends Error {
@@ -226,7 +270,7 @@ export const authApi = {
 export const restaurantsApi = {
   create(values: CreateRestaurantPayload) {
     return apiRequest<{ data: Restaurant; message: string }>("/restaurants", {
-      body: values,
+      body: toRestaurantFormData(values),
       method: "POST",
     });
   },
@@ -254,13 +298,45 @@ export const restaurantsApi = {
     );
   },
 
+  listVisits(restaurantId: string) {
+    return apiRequest<{ message: string; visits: RestaurantVisit[] }>(
+      `/restaurants/${restaurantId}/visits`,
+    );
+  },
+
+  createVisit(restaurantId: string, values: CreateRestaurantVisitPayload) {
+    return apiRequest<{ data: RestaurantVisit; message: string }>(
+      `/restaurants/${restaurantId}/visits`,
+      {
+        body: values,
+        method: "POST",
+      },
+    );
+  },
+
   update(restaurantId: string, values: UpdateRestaurantPayload) {
     return apiRequest<{ data: Restaurant; message: string }>(
       `/restaurants/${restaurantId}`,
       {
-        body: values,
+        body: toRestaurantFormData(values),
         method: "PATCH",
       },
     );
   },
 };
+
+function toRestaurantFormData(
+  values: CreateRestaurantPayload | UpdateRestaurantPayload,
+) {
+  const formData = new FormData();
+
+  Object.entries(values).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") {
+      return;
+    }
+
+    formData.append(key, value instanceof File ? value : String(value));
+  });
+
+  return formData;
+}
