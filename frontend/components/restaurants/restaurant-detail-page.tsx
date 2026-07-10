@@ -16,6 +16,7 @@ import {
   ImagePlus,
   LoaderCircle,
   MapPin,
+  MoreVertical,
   Navigation,
   Pencil,
   Plus,
@@ -23,6 +24,7 @@ import {
   RefreshCw,
   ReceiptText,
   Save,
+  Share2,
   Star,
   Trash2,
   Utensils,
@@ -350,26 +352,22 @@ export default function RestaurantDetailPage({
 
   return (
     <AppShell activeItem="Restaurants">
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-        <Link
-          className="inline-flex min-h-11 w-fit items-center gap-2 rounded-full border border-border bg-surface px-4 text-sm font-bold text-ink-primary shadow-card transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
-          href="/restaurants"
-        >
-          <ArrowLeft aria-hidden="true" size={17} />
-          Restaurants
-        </Link>
-
+      <main className="mx-auto flex w-full max-w-full flex-col overflow-x-hidden px-0 py-0 sm:px-6 sm:py-6 lg:max-w-none lg:px-8 lg:py-8 xl:px-10">
         {view === "loading" ? <LoadingState /> : null}
         {view === "error" ? <ErrorState onRetry={loadRestaurant} /> : null}
         {view === "not-found" ? <NotFoundState /> : null}
         {view === "ready" && restaurant ? (
           <>
-            <StatusMessage message={statusMessage} status={mutationStatus} />
-            <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-              <div className="space-y-5">
+            {isEditing ? (
+              <section className="mx-auto min-h-svh w-full max-w-[760px] overflow-hidden border-border bg-[radial-gradient(circle_at_10%_0%,rgba(209,154,82,0.08),transparent_24rem),linear-gradient(180deg,#12100e_0%,#0d0d0c_100%)] shadow-raised sm:min-h-0 sm:rounded-card sm:border">
                 <HeroCard restaurant={restaurant} />
-
-                {isEditing ? (
+                <div className="-mx-1">
+                  <div className="px-5 py-6 sm:px-8 sm:py-8">
+                    <StatusMessage
+                      message={statusMessage}
+                      status={mutationStatus}
+                    />
+                  </div>
                   <EditForm
                     errors={errors}
                     handleSubmit={handleSubmit}
@@ -384,30 +382,53 @@ export default function RestaurantDetailPage({
                     selectedRating={selectedRating}
                     setValue={setValue}
                   />
-                ) : (
-                  <>
-                    <ReadDetails restaurant={restaurant} />
+                </div>
+              </section>
+            ) : (
+              <>
+                <section className="mx-auto min-h-svh w-full max-w-[760px] overflow-hidden border-border bg-[radial-gradient(circle_at_10%_0%,rgba(209,154,82,0.08),transparent_24rem),linear-gradient(180deg,#12100e_0%,#0d0d0c_100%)] shadow-raised sm:min-h-0 sm:rounded-card sm:border lg:hidden">
+                  <HeroCard restaurant={restaurant} />
+
+                  <div className="min-w-0 space-y-8 px-5 py-6 sm:px-8 sm:py-8">
+                    <StatusMessage
+                      message={statusMessage}
+                      status={mutationStatus}
+                    />
+                    <ReadDetails
+                      restaurant={restaurant}
+                      onLogVisit={() => setShowVisitDialog(true)}
+                    />
                     <VisitHistorySection
                       visits={visits}
                       visitsView={visitsView}
                       onLogVisit={() => setShowVisitDialog(true)}
                       onRetry={loadVisits}
                     />
-                  </>
-                )}
-              </div>
+                    <ActionPanel
+                      isEditing={isEditing}
+                      isMutating={isMutating}
+                      onDelete={() => setShowDeleteConfirm(true)}
+                      onEdit={() => setIsEditing(true)}
+                    />
+                    <MetaPanel restaurant={restaurant} />
+                  </div>
+                </section>
 
-              <aside className="space-y-4">
-                <ActionPanel
+                <DesktopRestaurantDetail
                   isEditing={isEditing}
                   isMutating={isMutating}
+                  restaurant={restaurant}
+                  statusMessage={statusMessage}
+                  mutationStatus={mutationStatus}
+                  visits={visits}
+                  visitsView={visitsView}
                   onDelete={() => setShowDeleteConfirm(true)}
                   onEdit={() => setIsEditing(true)}
+                  onLogVisit={() => setShowVisitDialog(true)}
+                  onRetryVisits={loadVisits}
                 />
-
-                <MetaPanel restaurant={restaurant} />
-              </aside>
-            </section>
+              </>
+            )}
           </>
         ) : null}
 
@@ -435,7 +456,6 @@ export default function RestaurantDetailPage({
     </AppShell>
   );
 }
-
 const emptyFormValues: RestaurantFormValues = {
   address: "",
   bannerImage: undefined,
@@ -512,6 +532,11 @@ function nullableString(value?: string) {
   return trimmed ? trimmed : null;
 }
 
+function getBestDish(visits: RestaurantVisit[]) {
+  const allDishes = visits.flatMap((visit) => visit.dishes);
+  return allDishes.find((dish) => dish.wouldEatAgain) ?? allDishes[0];
+}
+
 function toDateInputValue(value?: string | null) {
   if (!value) {
     return "";
@@ -526,28 +551,44 @@ function HeroCard({ restaurant }: { restaurant: Restaurant }) {
   const cuisine = restaurant.cuisine || "Cuisine not set";
 
   return (
-    <header className="overflow-hidden rounded-card border border-border bg-surface shadow-raised">
-      <div className="relative min-h-[280px] bg-[radial-gradient(circle_at_25%_20%,rgba(209,154,82,0.36),transparent_34%),linear-gradient(145deg,#2b2118,#100f0d)]">
+    <header className="overflow-hidden border-b border-border/80 bg-bg">
+      <div className="flex min-h-[68px] items-center justify-between px-5 sm:px-8">
+        <Link
+          aria-label="Back to restaurants"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full text-accent/90 transition hover:bg-accent-soft hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          href="/restaurants"
+        >
+          <ArrowLeft aria-hidden="true" size={24} />
+        </Link>
+        <button
+          aria-label="Restaurant options"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full text-accent/90 transition hover:bg-accent-soft hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          type="button"
+        >
+          <MoreVertical aria-hidden="true" size={24} />
+        </button>
+      </div>
+
+      <div className="relative min-h-[300px] bg-[radial-gradient(circle_at_25%_20%,rgba(209,154,82,0.24),transparent_34%),linear-gradient(145deg,#2b2118,#100f0d)] sm:min-h-[330px]">
         <img
           alt="Warm restaurant table"
-          className="absolute inset-0 h-full w-full object-cover opacity-45 mix-blend-screen"
+          className="absolute inset-0 h-full w-full object-cover opacity-55"
           src={
             restaurant?.bannerImageUrl
               ? restaurant?.bannerImageUrl
               : "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80"
           }
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/60 to-transparent" />
-        <div className="relative flex min-h-[280px] flex-col justify-end p-5 sm:p-6">
-          <p className="text-xs font-bold uppercase tracking-normal text-accent">
-            Restaurant detail
-          </p>
-          <h1 className="mt-3 font-display text-4xl font-semibold leading-tight text-ink-primary sm:text-5xl">
+        <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/72 to-bg/10" />
+        <div className="relative flex min-h-[300px] flex-col justify-end px-5 pb-8 sm:min-h-[330px] sm:px-8 sm:pb-10">
+          <h1 className="break-words font-display text-[36px] font-bold leading-[0.95] tracking-[-0.025em] text-ink-primary sm:text-[46px]">
             {restaurant.name}
           </h1>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold text-ink-secondary">
             <InfoPill icon={ChefHat} label={cuisine} />
+            <span className="hidden h-5 w-px bg-border/70 sm:block" />
             <InfoPill icon={MapPin} label={location} />
+            <span className="hidden h-5 w-px bg-border/70 sm:block" />
             <RatingPill rating={restaurant.rating} />
           </div>
         </div>
@@ -556,39 +597,415 @@ function HeroCard({ restaurant }: { restaurant: Restaurant }) {
   );
 }
 
-function ReadDetails({ restaurant }: { restaurant: Restaurant }) {
+function DesktopRestaurantDetail({
+  isEditing,
+  isMutating,
+  mutationStatus,
+  onDelete,
+  onEdit,
+  onLogVisit,
+  onRetryVisits,
+  restaurant,
+  statusMessage,
+  visits,
+  visitsView,
+}: {
+  isEditing: boolean;
+  isMutating: boolean;
+  mutationStatus: MutationStatus;
+  onDelete: () => void;
+  onEdit: () => void;
+  onLogVisit: () => void;
+  onRetryVisits: () => void;
+  restaurant: Restaurant;
+  statusMessage: string;
+  visits: RestaurantVisit[];
+  visitsView: VisitsView;
+}) {
+  const bestDish = getBestDish(visits);
+
   return (
-    <section className="grid gap-4 md:grid-cols-2">
-      <DetailCard
+    <section className="mx-auto hidden w-full max-w-[1180px] lg:block">
+      <DesktopTopBar />
+      <StatusMessage message={statusMessage} status={mutationStatus} />
+      <DesktopHero restaurant={restaurant} onLogVisit={onLogVisit} />
+      <DesktopInfoStrip restaurant={restaurant} />
+
+      <div className="mt-5 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.95fr)]">
+        <DesktopVisitPanel
+          visits={visits}
+          visitsView={visitsView}
+          onLogVisit={onLogVisit}
+          onRetry={onRetryVisits}
+        />
+
+        <aside className="min-w-0 space-y-4">
+          <DesktopNextBestAction dish={bestDish} />
+          <ActionPanel
+            desktop
+            isEditing={isEditing}
+            isMutating={isMutating}
+            onDelete={onDelete}
+            onEdit={onEdit}
+          />
+          <MetaPanel desktop restaurant={restaurant} />
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function DesktopTopBar() {
+  return (
+    <div className="mb-6 flex items-center justify-between gap-4">
+      <Link
+        className="inline-flex min-h-11 items-center gap-3 rounded-full px-2 text-sm font-semibold text-ink-secondary transition hover:text-ink-primary focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        href="/restaurants"
+      >
+        <ArrowLeft aria-hidden="true" size={18} />
+        Back to restaurants
+      </Link>
+
+      <div className="flex items-center gap-2">
+        <button
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-border bg-bg/70 px-4 text-sm font-semibold text-ink-primary transition hover:border-accent/45 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          type="button"
+        >
+          <Share2 aria-hidden="true" size={16} />
+          Share
+        </button>
+        <button
+          aria-label="More restaurant options"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-control border border-border bg-bg/70 text-ink-secondary transition hover:border-accent/45 hover:text-ink-primary focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          type="button"
+        >
+          <MoreVertical aria-hidden="true" size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DesktopHero({
+  onLogVisit,
+  restaurant,
+}: {
+  onLogVisit: () => void;
+  restaurant: Restaurant;
+}) {
+  const location = getLocation(restaurant);
+  const cuisine = restaurant.cuisine || "Cuisine not set";
+
+  return (
+    <section className="grid min-h-[280px] overflow-hidden rounded-card border border-border bg-[linear-gradient(135deg,#1a1714,#100f0d)] shadow-card lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.96fr)]">
+      <div className="relative min-h-[280px] overflow-hidden">
+        <img
+          alt="Warm restaurant table"
+          className="absolute inset-0 h-full w-full object-cover opacity-70"
+          src={
+            restaurant.bannerImageUrl ??
+            "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80"
+          }
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-bg/20 to-bg/85" />
+        <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-bg to-transparent" />
+      </div>
+
+      <div className="flex min-w-0 flex-col justify-center px-8 py-8">
+        <span className="w-fit rounded-full border border-border bg-surface px-4 py-2 text-xs font-semibold text-ink-primary">
+          {cuisine}
+        </span>
+        <h1 className="mt-5 break-words font-display text-[44px] font-bold leading-[0.95] tracking-[-0.025em] text-ink-primary">
+          {restaurant.name}
+        </h1>
+        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-semibold text-ink-secondary">
+          <span className="inline-flex items-center gap-2">
+            <MapPin aria-hidden="true" className="text-accent" size={16} />
+            {location}
+          </span>
+          <span className="h-5 w-px bg-border" />
+          <span>{restaurant.city || "City not saved"}</span>
+        </div>
+        <p className="mt-5 max-w-xl text-sm leading-6 text-ink-secondary">
+          {restaurant.notes || "No notes yet."}
+        </p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <RatingPill rating={restaurant.rating} />
+          <button
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-border bg-bg/80 px-5 text-sm font-semibold text-ink-primary transition hover:border-accent/45 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            type="button"
+          >
+            <Star aria-hidden="true" size={15} />
+            Add to wishlist
+          </button>
+          <button
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-accent px-7 text-sm font-semibold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            type="button"
+            onClick={onLogVisit}
+          >
+            <PlusCircle aria-hidden="true" size={16} />
+            Log visit
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DesktopInfoStrip({ restaurant }: { restaurant: Restaurant }) {
+  return (
+    <section className="mt-5 grid overflow-hidden rounded-card border border-border bg-surface/55 shadow-card md:grid-cols-2 xl:grid-cols-4">
+      <DesktopInfoItem
         icon={CalendarDays}
         label="Visited"
         value={formatDate(restaurant.visitedAt ?? restaurant.createdAt)}
       />
-      <DetailCard
+      <DesktopInfoItem
         icon={ChefHat}
         label="Cuisine"
         value={restaurant.cuisine || "Not saved"}
       />
-      <DetailCard
+      <DesktopInfoItem
         icon={MapPin}
         label="Address"
-        value={restaurant.address || "Not saved"}
+        value={restaurant.address || getLocation(restaurant)}
       />
-      <DetailCard
+      <DesktopInfoItem
         icon={Navigation}
         label="City"
-        value={getLocation(restaurant)}
+        value={restaurant.city || "Not saved"}
       />
-      <article className="rounded-card border border-border bg-surface p-5 shadow-card md:col-span-2">
-        <p className="flex items-center gap-2 text-xs font-bold uppercase text-accent">
-          <ClipboardPenLine aria-hidden="true" size={16} />
-          Notes
+    </section>
+  );
+}
+
+function DesktopInfoItem({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-4 border-b border-border/70 px-8 py-5 last:border-b-0 md:[&:nth-child(odd)]:border-r xl:border-b-0 xl:border-r xl:last:border-r-0">
+      <Icon aria-hidden="true" className="shrink-0 text-accent" size={20} />
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-accent">{label}</p>
+        <p className="mt-1 truncate text-sm font-bold text-ink-primary">
+          {value}
         </p>
-        <p className="mt-3 text-sm leading-6 text-ink-secondary">
-          {restaurant.notes ||
-            "No notes yet. Edit this restaurant to add what stood out."}
-        </p>
-      </article>
+      </div>
+    </div>
+  );
+}
+
+function DesktopVisitPanel({
+  onLogVisit,
+  onRetry,
+  visits,
+  visitsView,
+}: {
+  onLogVisit: () => void;
+  onRetry: () => void;
+  visits: RestaurantVisit[];
+  visitsView: VisitsView;
+}) {
+  return (
+    <section
+      className="min-w-0 rounded-card border border-border bg-surface/55 p-5 shadow-card"
+      aria-labelledby="desktop-visit-history-title"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p
+            className="flex items-center gap-2 text-sm font-bold text-ink-primary"
+            id="desktop-visit-history-title"
+          >
+            <History aria-hidden="true" className="text-accent" size={19} />
+            Visit history
+          </p>
+          <p className="mt-2 text-sm text-ink-secondary">
+            Every visit becomes its own memory.
+          </p>
+        </div>
+        <button
+          className="text-sm font-semibold text-accent transition hover:text-accent-hover"
+          type="button"
+          onClick={onLogVisit}
+        >
+          View all visits
+        </button>
+      </div>
+
+      {visitsView === "loading" ? <VisitsLoadingState /> : null}
+      {visitsView === "error" ? <VisitsErrorState onRetry={onRetry} /> : null}
+      {visitsView === "empty" ? <VisitsEmptyState onLogVisit={onLogVisit} /> : null}
+      {visitsView === "ready" ? (
+        <div className="mt-5 space-y-4">
+          {visits.map((visit, index) => (
+            <DesktopVisitCard
+              index={visits.length - index}
+              key={visit.id}
+              visit={visit}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <DesktopReorderNotes visits={visits} />
+    </section>
+  );
+}
+
+function DesktopVisitCard({
+  index,
+  visit,
+}: {
+  index: number;
+  visit: RestaurantVisit;
+}) {
+  return (
+    <article className="rounded-card border border-border bg-bg/35 p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-bold text-accent">
+              Visit {index}
+            </span>
+            <p className="text-sm font-bold text-ink-primary">
+              {formatDate(visit.visitedAt ?? visit.createdAt)}
+            </p>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-ink-secondary">
+            {visit.visitNotes || "No notes saved for this visit yet."}
+          </p>
+        </div>
+        <MoreVertical
+          aria-hidden="true"
+          className="shrink-0 text-ink-tertiary"
+          size={17}
+        />
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <RatingPill rating={visit.rating} />
+        {visit.totalAmountPaid !== undefined &&
+        visit.totalAmountPaid !== null ? (
+          <span className="inline-flex min-h-8 items-center rounded-full border border-border/80 bg-surface px-3 text-xs font-bold text-ink-secondary">
+            {formatCurrency(visit.totalAmountPaid)}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {visit.dishes.length > 0 ? (
+          visit.dishes.map((dish) => (
+            <span
+              className="rounded-full border border-border/80 bg-surface px-3 py-1 text-xs font-semibold text-ink-secondary"
+              key={dish.id}
+            >
+              {dish.name}
+            </span>
+          ))
+        ) : (
+          <span className="rounded-full border border-dashed border-border/80 bg-surface px-3 py-1 text-xs font-semibold text-ink-tertiary">
+            Add dishes later
+          </span>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function DesktopReorderNotes({ visits }: { visits: RestaurantVisit[] }) {
+  const reorderDishes = visits
+    .flatMap((visit) => visit.dishes)
+    .filter((dish) => dish.wouldEatAgain);
+
+  return (
+    <section className="mt-8 rounded-card border border-success/25 bg-success/10 p-5">
+      <p className="flex items-center gap-2 text-sm font-bold text-success">
+        <ReceiptText aria-hidden="true" size={18} />
+        Reorder notes
+      </p>
+      <p className="mt-5 text-sm leading-6 text-ink-secondary">
+        {reorderDishes.length > 0
+          ? reorderDishes.map((dish) => dish.name).join(", ")
+          : "Mark dishes as worth eating again when you log visits."}
+      </p>
+    </section>
+  );
+}
+
+function DesktopNextBestAction({
+  dish,
+}: {
+  dish?: RestaurantVisit["dishes"][number];
+}) {
+  const title = dish ? `Go back for ${dish.name}.` : "Log one great dish next.";
+
+  return (
+    <section className="rounded-card border border-border bg-surface/55 p-5 shadow-card">
+      <p className="flex items-center gap-2 text-sm font-bold text-ink-primary">
+        <ChefHat aria-hidden="true" className="text-accent" size={18} />
+        Next best action
+      </p>
+      <h2 className="mt-2 font-display text-[26px] font-bold leading-[1.02] tracking-[-0.025em] text-ink-primary">
+        {title}
+      </h2>
+      <p className="mt-3 text-sm leading-6 text-ink-secondary">
+        Your highest notes point to saved dishes and visits that are worth
+        repeating.
+      </p>
+    </section>
+  );
+}
+
+function ReadDetails({
+  onLogVisit,
+  restaurant,
+}: {
+  onLogVisit: () => void;
+  restaurant: Restaurant;
+}) {
+  return (
+    <section className="border-b border-[rgba(64,55,45,0.65)] pb-8">
+      <SectionEyebrow>Info</SectionEyebrow>
+      <div className="mt-5 divide-y divide-[rgba(64,55,45,0.65)]">
+        <DetailRow
+          icon={CalendarDays}
+          label="Visited"
+          value={formatDate(restaurant.visitedAt ?? restaurant.createdAt)}
+        />
+        <DetailRow
+          icon={Utensils}
+          label="Cuisine"
+          value={restaurant.cuisine || "Not saved"}
+        />
+        <DetailRow
+          icon={MapPin}
+          label="Address"
+          value={restaurant.address || getLocation(restaurant)}
+        />
+        <DetailRow
+          icon={Navigation}
+          label="City"
+          value={restaurant.city || "Not saved"}
+        />
+        <DetailRow
+          icon={ClipboardPenLine}
+          label="Notes"
+          value={restaurant.notes || "No notes yet"}
+        />
+      </div>
+      <button
+        className="mt-6 flex min-h-[52px] w-full items-center justify-center gap-3 rounded-card border border-success/35 bg-success/5 px-4 text-sm font-semibold text-success transition hover:bg-success/10 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        type="button"
+        onClick={onLogVisit}
+      >
+        <PlusCircle aria-hidden="true" size={20} />
+        Log revisit
+      </button>
     </section>
   );
 }
@@ -604,160 +1021,126 @@ function VisitHistorySection({
   visits: RestaurantVisit[];
   visitsView: VisitsView;
 }) {
-  const reorderDishes = visits
-    .flatMap((visit) => visit.dishes)
-    .filter((dish) => dish.wouldEatAgain)
-    .slice(0, 4);
+  const bestDish = getBestDish(visits);
 
   return (
     <section
-      className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]"
+      className="border-b border-[rgba(64,55,45,0.65)] pb-8"
       aria-labelledby="visit-history-title"
     >
-      <div className="rounded-card border border-border bg-surface p-4 shadow-card sm:p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="flex items-center gap-2 text-xs font-bold uppercase text-accent">
-              <History aria-hidden="true" size={16} />
-              Visit history
-            </p>
-            <h2
-              className="mt-2 font-display text-2xl font-semibold text-ink-primary"
-              id="visit-history-title"
-            >
-              Every visit becomes its own memory.
-            </h2>
-          </div>
-          <button
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-success/30 bg-success/10 px-4 text-sm font-bold text-success transition hover:bg-success/15 focus:outline-none focus:ring-4 focus:ring-accent-soft"
-            type="button"
-            onClick={onLogVisit}
-          >
-            <PlusCircle aria-hidden="true" size={17} />
-            Log revisit
-          </button>
-        </div>
-
-        {visitsView === "loading" ? <VisitsLoadingState /> : null}
-        {visitsView === "error" ? <VisitsErrorState onRetry={onRetry} /> : null}
-        {visitsView === "empty" ? (
-          <VisitsEmptyState onLogVisit={onLogVisit} />
-        ) : null}
-        {visitsView === "ready" ? (
-          <div className="mt-5 space-y-4">
-            {visits.map((visit, index) => (
-              <VisitCard
-                index={visits.length - index}
-                key={visit.id}
-                visit={visit}
-              />
-            ))}
-          </div>
-        ) : null}
+      <div className="flex items-center justify-between gap-4">
+        <SectionEyebrow id="visit-history-title">Visit history</SectionEyebrow>
+        <button
+          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 text-sm font-semibold text-success transition hover:bg-success/15 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          type="button"
+          onClick={onLogVisit}
+        >
+          <PlusCircle aria-hidden="true" size={16} />
+          Revisit
+        </button>
       </div>
 
-      <aside className="space-y-4">
-        <section className="rounded-card border border-success/25 bg-success/10 p-4 shadow-card">
-          <p className="flex items-center gap-2 text-xs font-bold uppercase text-success">
-            <ReceiptText aria-hidden="true" size={16} />
-            Reorder notes
-          </p>
-          <div className="mt-4 space-y-3">
-            {reorderDishes.length > 0 ? (
-              reorderDishes.map((dish) => (
-                <div
-                  className="rounded-control border border-success/20 bg-bg/70 p-3"
-                  key={dish.id}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-display text-lg font-semibold text-ink-primary">
-                        {dish.name}
-                      </p>
-                      <p className="mt-1 text-xs font-bold text-success">
-                        Would eat again
-                      </p>
-                    </div>
-                    <RatingPill rating={dish.rating} />
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-control border border-success/20 bg-bg/70 p-3 text-sm leading-6 text-ink-secondary">
-                Mark dishes as worth eating again when you log visits.
-              </p>
-            )}
-          </div>
-        </section>
+      {visitsView === "loading" ? <VisitsLoadingState /> : null}
+      {visitsView === "error" ? <VisitsErrorState onRetry={onRetry} /> : null}
+      {visitsView === "empty" ? <VisitsEmptyState onLogVisit={onLogVisit} /> : null}
+      {visitsView === "ready" ? (
+        <div className="mt-5 divide-y divide-[rgba(64,55,45,0.65)]">
+          {visits.map((visit, index) => (
+            <VisitCard
+              isLast={index === visits.length - 1}
+              key={visit.id}
+              visit={visit}
+            />
+          ))}
+        </div>
+      ) : null}
 
-        <section className="rounded-card border border-border bg-surface p-4 shadow-card">
-          <p className="text-xs font-bold uppercase text-accent">
-            Next best action
-          </p>
-          <h3 className="mt-2 font-display text-xl font-semibold text-ink-primary">
-            Go back for the prawns.
-          </h3>
-          <p className="mt-3 text-sm leading-6 text-ink-secondary">
-            Your highest notes point to seafood, slow dinner plans, and dishes
-            that held up across multiple visits.
-          </p>
-        </section>
-      </aside>
+      <NextBestAction dish={bestDish} />
     </section>
   );
 }
 
 function VisitCard({
-  index,
+  isLast,
   visit,
 }: {
-  index: number;
+  isLast: boolean;
   visit: RestaurantVisit;
 }) {
   return (
-    <article className="relative rounded-card border border-border bg-bg p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-accent/30 bg-accent-soft px-3 py-1 text-xs font-bold text-accent">
-              Visit {index}
-            </span>
-            <span className="text-sm font-bold text-ink-primary">
-              {formatDate(visit.visitedAt ?? visit.createdAt)}
-            </span>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-ink-secondary">
-            {visit.visitNotes || "No notes saved for this visit yet."}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <RatingPill rating={visit.rating} />
-          {visit.totalAmountPaid !== undefined &&
-          visit.totalAmountPaid !== null ? (
-            <span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold text-ink-secondary">
-              {formatCurrency(visit.totalAmountPaid)}
-            </span>
-          ) : null}
-        </div>
+    <article className="relative grid min-w-0 grid-cols-[28px_minmax(0,1fr)] gap-4 py-4">
+      <div className="relative flex justify-center">
+        <span className="mt-1 h-4 w-4 rounded-full border-2 border-accent bg-bg" />
+        {!isLast ? (
+          <span className="absolute bottom-0 top-7 w-px bg-accent/40" />
+        ) : null}
       </div>
+      <div className="min-w-0">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="break-words font-display text-[23px] font-bold leading-none tracking-[-0.015em] text-ink-primary">
+              {formatDate(visit.visitedAt ?? visit.createdAt)}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-ink-secondary">
+              {visit.visitNotes || "No notes saved for this visit yet."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <RatingPill rating={visit.rating} />
+            {visit.totalAmountPaid !== undefined &&
+            visit.totalAmountPaid !== null ? (
+              <span className="inline-flex min-h-8 items-center rounded-full border border-border/80 bg-surface px-3 text-xs font-bold text-ink-secondary">
+                {formatCurrency(visit.totalAmountPaid)}
+              </span>
+            ) : null}
+          </div>
+        </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        {visit.dishes.length > 0 ? (
-          visit.dishes.map((dish) => (
-            <span
-              className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold text-ink-secondary"
-              key={dish.id}
-            >
-              {dish.name}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {visit.dishes.length > 0 ? (
+            visit.dishes.map((dish) => (
+              <span
+                className="rounded-full border border-border/80 bg-surface px-3 py-1 text-xs font-semibold text-ink-secondary"
+                key={dish.id}
+              >
+                {dish.name}
+              </span>
+            ))
+          ) : (
+            <span className="rounded-full border border-dashed border-border/80 bg-surface px-3 py-1 text-xs font-semibold text-ink-tertiary">
+              Add dishes later
             </span>
-          ))
-        ) : (
-          <span className="rounded-full border border-dashed border-border bg-surface px-3 py-1 text-xs font-bold text-ink-tertiary">
-            Add dishes later
-          </span>
-        )}
+          )}
+        </div>
       </div>
     </article>
+  );
+}
+
+function NextBestAction({
+  dish,
+}: {
+  dish?: RestaurantVisit["dishes"][number];
+}) {
+  const title = dish ? `Go back for ${dish.name}.` : "Log one great dish next.";
+
+  return (
+    <section className="mt-8 border-t border-[rgba(64,55,45,0.65)] pt-8">
+      <SectionEyebrow>Next best action</SectionEyebrow>
+      <div className="mt-5 grid grid-cols-[38px_minmax(0,1fr)] gap-4">
+        <div className="flex h-10 w-10 items-start justify-center pt-1 text-accent">
+          <ChefHat aria-hidden="true" size={28} />
+        </div>
+        <div className="min-w-0">
+          <h3 className="break-words font-display text-[32px] font-bold leading-[1.02] tracking-[-0.025em] text-ink-primary">
+            {title}
+          </h3>
+          <p className="mt-3 text-sm leading-[1.6] text-ink-secondary">
+            Your visit notes and saved dishes make the next choice easy.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -780,8 +1163,8 @@ function VisitsLoadingState() {
 
 function VisitsEmptyState({ onLogVisit }: { onLogVisit: () => void }) {
   return (
-    <div className="mt-5 rounded-card border border-dashed border-border bg-bg p-6 text-center">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-border bg-surface text-ink-tertiary">
+    <div className="mt-5 rounded-card border border-dashed border-border bg-bg p-6">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-surface text-ink-tertiary">
         <History aria-hidden="true" size={24} />
       </div>
       <h3 className="mt-4 font-display text-xl font-semibold text-ink-primary">
@@ -862,19 +1245,19 @@ function EditForm({
 }) {
   return (
     <form
-      className="rounded-card border border-border bg-surface p-4 shadow-card sm:p-6"
+      className="min-w-0 overflow-hidden rounded-card border border-border bg-surface p-4 shadow-card sm:p-6"
       noValidate
       onSubmit={handleSubmit(onSubmit)}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-bold uppercase text-accent">Edit</p>
-          <h2 className="mt-1 font-display text-2xl font-semibold text-ink-primary">
+          <h2 className="mt-1 break-words font-display text-2xl font-semibold text-ink-primary">
             Update restaurant
           </h2>
         </div>
         <button
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-border bg-bg px-4 text-sm font-bold text-ink-primary transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-border bg-bg px-4 text-sm font-bold text-ink-primary transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft sm:w-auto"
           type="button"
           onClick={onCancel}
         >
@@ -883,7 +1266,7 @@ function EditForm({
         </button>
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <div className="mt-5 grid min-w-0 gap-4 lg:grid-cols-2">
         <BannerImageField
           currentImageUrl={currentBannerImageUrl}
           error={errors.bannerImage?.message}
@@ -1017,13 +1400,13 @@ function BannerImageField({
 
   return (
     <section className="lg:col-span-2">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <label className="text-sm font-bold text-ink-primary" htmlFor="bannerImage">
           Banner image
         </label>
         {hasSelectedImage ? (
           <button
-            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-error/30 bg-error/10 px-3 text-xs font-bold text-error transition hover:border-error focus:outline-none focus:ring-4 focus:ring-error/20"
+            className="inline-flex min-h-9 w-fit items-center justify-center gap-2 rounded-full border border-error/30 bg-error/10 px-3 text-xs font-bold text-error transition hover:border-error focus:outline-none focus:ring-4 focus:ring-error/20"
             type="button"
             onClick={onClear}
           >
@@ -1034,11 +1417,11 @@ function BannerImageField({
       </div>
 
       <label
-        className="mt-2 flex min-h-52 cursor-pointer overflow-hidden rounded-card border border-dashed border-accent/35 bg-surface-sunken transition hover:border-accent/70 focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft"
+        className="mt-2 flex min-h-44 cursor-pointer overflow-hidden rounded-card border border-dashed border-accent/35 bg-surface-sunken transition hover:border-accent/70 focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft sm:min-h-52"
         htmlFor="bannerImage"
       >
         {visibleImageUrl ? (
-          <span className="relative block h-52 w-full">
+          <span className="relative block h-44 w-full sm:h-52">
             <img
               alt={
                 hasSelectedImage
@@ -1048,7 +1431,7 @@ function BannerImageField({
               className="h-full w-full object-cover"
               src={visibleImageUrl}
             />
-            <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-bg via-bg/75 to-transparent p-4">
+            <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-bg via-bg/75 to-transparent p-3 sm:p-4">
               <span>
                 <span className="block text-xs font-bold uppercase text-accent">
                   {hasSelectedImage ? "New banner selected" : "Current banner"}
@@ -1098,36 +1481,55 @@ function BannerImageField({
 }
 
 function ActionPanel({
+  desktop = false,
   isEditing,
   isMutating,
   onDelete,
   onEdit,
 }: {
+  desktop?: boolean;
   isEditing: boolean;
   isMutating: boolean;
   onDelete: () => void;
   onEdit: () => void;
 }) {
   return (
-    <section className="rounded-card border border-border bg-surface p-4 shadow-card">
-      <p className="text-xs font-bold uppercase text-accent">Actions</p>
-      <div className="mt-4 grid gap-3">
+    <section
+      className={
+        desktop
+          ? "rounded-card border border-border bg-surface/55 p-5 shadow-card"
+          : "border-b border-[rgba(64,55,45,0.65)] pb-8"
+      }
+    >
+      {desktop ? (
+        <p className="flex items-center gap-2 text-sm font-bold text-ink-primary">
+          <Pencil aria-hidden="true" className="text-accent" size={18} />
+          Actions
+        </p>
+      ) : (
+        <SectionEyebrow>Actions</SectionEyebrow>
+      )}
+      <div className={desktop ? "mt-4 grid gap-2" : "mt-5 grid gap-3 sm:grid-cols-2"}>
         <button
-          className="flex min-h-12 items-center justify-center gap-2 rounded-control bg-accent px-4 text-sm font-bold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
+          className={`flex min-h-[52px] items-center justify-center gap-3 rounded-control px-4 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-60 ${
+            desktop
+              ? "border border-accent/25 bg-accent text-bg shadow-card hover:bg-accent-hover"
+              : "border border-accent/20 bg-accent-soft/80 text-accent hover:border-accent/35 hover:bg-accent-soft"
+          }`}
           disabled={isEditing || isMutating}
           type="button"
           onClick={onEdit}
         >
-          <Pencil aria-hidden="true" size={18} />
+          <Pencil aria-hidden="true" size={17} />
           Edit restaurant
         </button>
         <button
-          className="flex min-h-12 items-center justify-center gap-2 rounded-control border border-error/30 bg-error/10 px-4 text-sm font-bold text-error transition hover:bg-error/15 focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex min-h-[52px] items-center justify-center gap-3 rounded-control border border-error/25 bg-error/5 px-4 text-sm font-semibold text-error transition hover:bg-error/10 focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
           disabled={isMutating}
           type="button"
           onClick={onDelete}
         >
-          <Trash2 aria-hidden="true" size={18} />
+          <Trash2 aria-hidden="true" size={17} />
           Delete restaurant
         </button>
       </div>
@@ -1135,11 +1537,30 @@ function ActionPanel({
   );
 }
 
-function MetaPanel({ restaurant }: { restaurant: Restaurant }) {
+function MetaPanel({
+  desktop = false,
+  restaurant,
+}: {
+  desktop?: boolean;
+  restaurant: Restaurant;
+}) {
   return (
-    <section className="rounded-card border border-border bg-surface p-4 shadow-card">
-      <p className="text-xs font-bold uppercase text-accent">Record</p>
-      <div className="mt-4 space-y-3">
+    <section
+      className={
+        desktop
+          ? "rounded-card border border-border bg-surface/55 p-5 shadow-card"
+          : "pb-4"
+      }
+    >
+      {desktop ? (
+        <p className="flex items-center gap-2 text-sm font-bold text-ink-primary">
+          <ReceiptText aria-hidden="true" className="text-accent" size={18} />
+          Record
+        </p>
+      ) : (
+        <SectionEyebrow>Record</SectionEyebrow>
+      )}
+      <div className="mt-5 divide-y divide-[rgba(64,55,45,0.65)]">
         <MetaRow label="Created" value={formatDate(restaurant.createdAt)} />
         <MetaRow label="Updated" value={formatDate(restaurant.updatedAt)} />
         <MetaRow label="Owner link" value="Private to your account" />
@@ -1160,10 +1581,10 @@ function DeleteDialog({
   restaurantName: string;
 }) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-bg/75 p-4 backdrop-blur sm:items-center">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center overflow-x-hidden bg-bg/75 p-0 backdrop-blur sm:items-center sm:p-4">
       <section
         aria-modal="true"
-        className="w-full max-w-md rounded-card border border-error/30 bg-surface p-5 shadow-raised"
+        className="w-full max-w-md rounded-t-[28px] border border-b-0 border-error/30 bg-surface p-5 pb-[calc(20px+env(safe-area-inset-bottom))] shadow-raised sm:rounded-card sm:border"
         role="dialog"
       >
         <div className="flex h-12 w-12 items-center justify-center rounded-full border border-error/30 bg-error/10 text-error">
@@ -1315,13 +1736,13 @@ function LogVisitDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-bg/75 p-4 backdrop-blur sm:items-center">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center overflow-x-hidden bg-bg/75 p-0 backdrop-blur sm:items-center sm:p-4">
       <section
         aria-modal="true"
-        className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-card border border-border bg-surface shadow-raised"
+        className="max-h-[calc(100svh-12px)] w-full max-w-full overflow-x-hidden overflow-y-auto rounded-t-[28px] border border-b-0 border-border bg-surface shadow-raised sm:max-h-[92vh] sm:max-w-3xl sm:rounded-card sm:border"
         role="dialog"
       >
-        <div className="relative overflow-hidden border-b border-border p-5 sm:p-6">
+        <div className="relative overflow-hidden border-b border-border p-4 sm:p-6">
           <img
             alt=""
             className="absolute inset-0 h-full w-full object-cover opacity-20"
@@ -1329,11 +1750,11 @@ function LogVisitDialog({
           />
           <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/90 to-bg/40" />
           <div className="relative flex items-start justify-between gap-4">
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-bold uppercase text-success">
                 Log revisit
               </p>
-              <h2 className="mt-2 font-display text-3xl font-semibold leading-tight text-ink-primary">
+              <h2 className="mt-2 break-words font-display text-2xl font-semibold leading-tight text-ink-primary sm:text-3xl">
                 {restaurantName}
               </h2>
               <p className="mt-2 max-w-xl text-sm leading-6 text-ink-secondary">
@@ -1353,7 +1774,7 @@ function LogVisitDialog({
         </div>
 
         <form
-          className="p-5 sm:p-6"
+          className="p-4 sm:p-6"
           noValidate
           onSubmit={handleSubmit(submitVisit)}
         >
@@ -1367,7 +1788,7 @@ function LogVisitDialog({
             </div>
           ) : null}
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid min-w-0 gap-4 lg:grid-cols-2">
             <VisitRatingField
               error={errors.rating?.message}
               register={register("rating")}
@@ -1427,7 +1848,7 @@ function LogVisitDialog({
               ) : null}
             </div>
 
-            <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_110px]">
+            <div className="mt-4 grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_110px]">
               <VisitField
                 error={dishErrors.name?.message}
                 icon={Utensils}
@@ -1445,7 +1866,7 @@ function LogVisitDialog({
                 register={registerDish("rating")}
                 type="number"
               />
-              <div className="lg:col-span-2">
+              <div className="min-w-0 lg:col-span-2">
                 <label
                   className="text-sm font-bold text-ink-primary"
                   htmlFor="dishNotes"
@@ -1465,7 +1886,7 @@ function LogVisitDialog({
             </div>
 
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <label className="flex min-h-11 items-center gap-3 rounded-full border border-success/25 bg-success/10 px-4 text-sm font-bold text-success">
+              <label className="flex min-h-11 w-full items-center justify-center gap-3 rounded-full border border-success/25 bg-success/10 px-4 text-sm font-bold text-success sm:w-auto">
                 <input
                   className="h-4 w-4 accent-current"
                   type="checkbox"
@@ -1474,7 +1895,7 @@ function LogVisitDialog({
                 Would eat again
               </label>
               <button
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-4 text-sm font-bold text-accent transition hover:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-4 text-sm font-bold text-accent transition hover:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft sm:w-auto"
                 type="button"
                 onClick={addDishDraft}
               >
@@ -1484,10 +1905,10 @@ function LogVisitDialog({
             </div>
 
             {dishDrafts.length > 0 ? (
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2">
                 {dishDrafts.map((dish, index) => (
                   <div
-                    className="rounded-control border border-border bg-surface p-3"
+                    className="min-w-0 rounded-control border border-border bg-surface p-3"
                     key={`${dish.name}-${index}`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -1511,7 +1932,7 @@ function LogVisitDialog({
             ) : null}
           </section>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-[1fr_1.4fr]">
+          <div className="sticky bottom-0 mt-6 grid gap-3 border-t border-border bg-surface pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] sm:static sm:grid-cols-[1fr_1.4fr] sm:border-t-0 sm:pb-0">
             <button
               className="min-h-12 rounded-control border border-border bg-bg px-4 text-sm font-bold text-ink-primary transition hover:border-accent/50 focus:outline-none focus:ring-4 focus:ring-accent-soft"
               disabled={isSaving}
@@ -1567,8 +1988,8 @@ function VisitRatingField({
       >
         Visit rating
       </label>
-      <div className="mt-2 rounded-control border border-border bg-surface-sunken p-3 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
-        <div className="flex items-center justify-between gap-3">
+      <div className="mt-2 min-w-0 rounded-control border border-border bg-surface-sunken p-3 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-display text-3xl font-semibold text-ink-primary">
             {selectedRating > 0 ? selectedRating.toFixed(1) : "0.0"}
             <span className="ml-1 text-base font-bold text-ink-secondary">
@@ -1576,7 +1997,7 @@ function VisitRatingField({
             </span>
           </p>
           <input
-            className="h-11 w-20 rounded-control border border-border bg-bg px-3 text-center text-base font-bold text-ink-primary outline-none focus:border-accent"
+            className="h-11 w-full min-w-0 rounded-control border border-border bg-bg px-3 text-center text-base font-bold text-ink-primary outline-none focus:border-accent sm:w-20"
             id="visitRating"
             inputMode="decimal"
             max="10"
@@ -1589,7 +2010,7 @@ function VisitRatingField({
             {...register}
           />
         </div>
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        <div className="mt-3 flex max-w-full flex-wrap gap-2">
           {quickRatings.map((rating) => (
             <button
               className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
@@ -1647,14 +2068,14 @@ function VisitField({
       <label className="text-sm font-bold text-ink-primary" htmlFor={id}>
         {label}
       </label>
-      <div className="mt-2 flex min-h-12 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+      <div className="mt-2 flex min-h-12 min-w-0 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
         <Icon
           aria-hidden="true"
           className="shrink-0 text-ink-secondary"
           size={19}
         />
         <input
-          className="min-w-0 flex-1 border-0 bg-transparent py-3 text-base text-ink-primary outline-none placeholder:text-ink-tertiary"
+          className="w-full min-w-0 flex-1 border-0 bg-transparent py-3 text-base text-ink-primary outline-none placeholder:text-ink-tertiary"
           id={id}
           placeholder={placeholder}
           type={type}
@@ -1688,8 +2109,8 @@ function RatingField({
       <label className="text-sm font-bold text-ink-primary" htmlFor="rating">
         Rating
       </label>
-      <div className="mt-2 rounded-control border border-border bg-surface-sunken p-3 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
-        <div className="flex items-center justify-between gap-3">
+      <div className="mt-2 min-w-0 rounded-control border border-border bg-surface-sunken p-3 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-display text-3xl font-semibold text-ink-primary">
             {selectedRating > 0 ? selectedRating.toFixed(1) : "0.0"}
             <span className="ml-1 text-base font-bold text-ink-secondary">
@@ -1697,7 +2118,7 @@ function RatingField({
             </span>
           </p>
           <input
-            className="h-11 w-20 rounded-control border border-border bg-bg px-3 text-center text-base font-bold text-ink-primary outline-none focus:border-accent"
+            className="h-11 w-full min-w-0 rounded-control border border-border bg-bg px-3 text-center text-base font-bold text-ink-primary outline-none focus:border-accent sm:w-20"
             id="rating"
             inputMode="decimal"
             max="10"
@@ -1710,7 +2131,7 @@ function RatingField({
             {...register}
           />
         </div>
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        <div className="mt-3 flex max-w-full flex-wrap gap-2">
           {quickRatings.map((rating) => (
             <button
               className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
@@ -1764,14 +2185,14 @@ function Field({
         {label}
         {required ? <span className="text-accent"> *</span> : null}
       </label>
-      <div className="mt-2 flex min-h-12 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+      <div className="mt-2 flex min-h-12 min-w-0 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
         <Icon
           aria-hidden="true"
           className="shrink-0 text-ink-secondary"
           size={19}
         />
         <input
-          className="min-w-0 flex-1 border-0 bg-transparent py-3 text-base text-ink-primary outline-none placeholder:text-ink-tertiary"
+          className="w-full min-w-0 flex-1 border-0 bg-transparent py-3 text-base text-ink-primary outline-none placeholder:text-ink-tertiary"
           id={id}
           type={type}
           aria-invalid={Boolean(error)}
@@ -1788,7 +2209,24 @@ function Field({
   );
 }
 
-function DetailCard({
+function SectionEyebrow({
+  children,
+  id,
+}: {
+  children: string;
+  id?: string;
+}) {
+  return (
+    <p
+      className="text-left text-xs font-[800] uppercase tracking-[0.12em] text-accent"
+      id={id}
+    >
+      {children}
+    </p>
+  );
+}
+
+function DetailRow({
   icon: Icon,
   label,
   value,
@@ -1798,22 +2236,30 @@ function DetailCard({
   value: string;
 }) {
   return (
-    <article className="rounded-card border border-border bg-surface p-5 shadow-card">
-      <p className="flex items-center gap-2 text-xs font-bold uppercase text-accent">
-        <Icon aria-hidden="true" size={16} />
+    <div className="grid min-h-[58px] min-w-0 grid-cols-[28px_minmax(70px,0.8fr)_minmax(0,1.2fr)] items-center gap-x-4 py-3 sm:grid-cols-[28px_140px_minmax(0,1fr)]">
+      <Icon
+        aria-hidden="true"
+        className="mt-0.5 shrink-0 text-ink-tertiary sm:mt-0"
+        size={20}
+      />
+      <p className="text-sm font-semibold text-ink-secondary">
         {label}
       </p>
-      <p className="mt-3 text-sm font-bold leading-6 text-ink-primary">
+      <p className="min-w-0 break-words text-right text-sm font-bold leading-6 text-ink-primary">
         {value}
       </p>
-    </article>
+    </div>
   );
 }
 
 function InfoPill({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
-    <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-border bg-bg/80 px-3 text-xs font-bold text-ink-primary">
-      <Icon aria-hidden="true" size={15} />
+    <span className="inline-flex min-h-8 min-w-0 items-center gap-2 text-sm font-semibold text-ink-secondary">
+      <Icon
+        aria-hidden="true"
+        className="shrink-0 text-accent"
+        size={18}
+      />
       {label}
     </span>
   );
@@ -1825,12 +2271,12 @@ function RatingPill({ rating }: { rating?: number | null }) {
   }
 
   return (
-    <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-border bg-bg/80 px-3 text-xs font-bold text-ink-primary">
+    <span className="inline-flex min-h-8 items-center gap-2 rounded-full border border-border/80 bg-bg/80 px-3 text-xs font-bold text-ink-primary">
       <Star
         aria-hidden="true"
         className="text-rating-gold"
         fill="currentColor"
-        size={15}
+        size={14}
       />
       {rating.toFixed(1)}/10
     </span>
@@ -1839,9 +2285,13 @@ function RatingPill({ rating }: { rating?: number | null }) {
 
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-border pb-3 last:border-b-0 last:pb-0">
-      <p className="text-xs font-semibold text-ink-tertiary">{label}</p>
-      <p className="text-right text-sm font-bold text-ink-primary">{value}</p>
+    <div className="grid min-h-[50px] min-w-0 grid-cols-[minmax(90px,0.8fr)_minmax(0,1.2fr)] items-center gap-4 py-3 first:pt-0 last:pb-0">
+      <p className="text-[13px] font-semibold text-ink-secondary">
+        {label}
+      </p>
+      <p className="min-w-0 break-words text-right text-sm font-semibold text-ink-primary">
+        {value}
+      </p>
     </div>
   );
 }

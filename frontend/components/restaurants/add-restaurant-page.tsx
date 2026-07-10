@@ -232,15 +232,15 @@ export default function AddRestaurantPage() {
 
   return (
     <AppShell activeItem="Add">
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+      <main className="mx-auto flex w-full max-w-full flex-col gap-6 overflow-x-hidden px-4 py-5 sm:px-6 lg:max-w-7xl lg:px-8 lg:py-8">
         <PageHeader />
 
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="rounded-card border border-border bg-surface p-4 shadow-card sm:p-6">
+        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <section className="min-w-0 overflow-hidden rounded-card border border-border bg-surface p-4 shadow-card sm:p-6">
             <StatusMessage restaurant={createdRestaurant} status={status} />
 
             <form
-              className="space-y-6"
+              className="min-w-0 space-y-6"
               noValidate
               onSubmit={handleSubmit(onSubmit)}
             >
@@ -251,7 +251,7 @@ export default function AddRestaurantPage() {
                   title="Restaurant"
                 />
 
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
                   <ImageUploadField
                     previewUrl={bannerImagePreviewUrl}
                     error={errors.bannerImage?.message}
@@ -285,7 +285,7 @@ export default function AddRestaurantPage() {
                       placeholder="Seafood"
                       register={register("cuisine")}
                     />
-                    <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                    <div className="mt-3 flex max-w-full flex-wrap gap-2">
                       {quickCuisines.map((cuisine) => (
                         <button
                           className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
@@ -317,7 +317,7 @@ export default function AddRestaurantPage() {
                   title="First visit"
                 />
 
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
                   <div>
                     <label
                       className="text-sm font-bold text-ink-primary"
@@ -325,9 +325,9 @@ export default function AddRestaurantPage() {
                     >
                       Rating
                     </label>
-                    <div className="mt-2 rounded-control border border-border bg-surface-sunken p-3 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
+                    <div className="mt-2 min-w-0 rounded-control border border-border bg-surface-sunken p-3 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+                      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
                           <p className="font-display text-3xl font-semibold text-ink-primary">
                             {selectedRating > 0
                               ? selectedRating.toFixed(1)
@@ -341,7 +341,7 @@ export default function AddRestaurantPage() {
                           </p>
                         </div>
                         <input
-                          className="h-11 w-20 rounded-control border border-border bg-bg px-3 text-center text-base font-bold text-ink-primary outline-none focus:border-accent"
+                          className="h-11 w-full min-w-0 rounded-control border border-border bg-bg px-3 text-center text-base font-bold text-ink-primary outline-none focus:border-accent sm:w-20"
                           id="rating"
                           inputMode="decimal"
                           placeholder="8.5"
@@ -356,7 +356,7 @@ export default function AddRestaurantPage() {
                           {...register("rating")}
                         />
                       </div>
-                      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                      <div className="mt-3 flex max-w-full flex-wrap gap-2">
                         {quickRatings.map((rating) => (
                           <button
                             className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
@@ -444,7 +444,7 @@ export default function AddRestaurantPage() {
                   title="Location"
                 />
 
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
                   <Field
                     error={errors.city?.message}
                     icon={MapPin}
@@ -527,7 +527,7 @@ export default function AddRestaurantPage() {
                 }
               />
 
-              <div className="sticky bottom-[calc(102px+env(safe-area-inset-bottom))] z-10 rounded-card border border-border bg-surface/95 p-3 shadow-raised backdrop-blur lg:static lg:p-0 lg:shadow-none">
+              <div className="sticky bottom-[calc(112px+env(safe-area-inset-bottom))] z-20 rounded-card border border-border bg-surface/95 p-3 shadow-raised backdrop-blur lg:static lg:p-0 lg:shadow-none">
                 <button
                   className="flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-accent px-5 py-3 text-base font-bold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-wait disabled:opacity-70"
                   disabled={isLoading}
@@ -566,7 +566,7 @@ export default function AddRestaurantPage() {
                   <p className="text-xs font-bold uppercase text-accent">
                     Quick log
                   </p>
-                  <h2 className="mt-1 font-display text-2xl font-semibold text-ink-primary">
+                  <h2 className="mt-1 break-words font-display text-2xl font-semibold text-ink-primary">
                     Add it before the details fade.
                   </h2>
                 </div>
@@ -783,7 +783,7 @@ function VisitDishPreview({
         title="Dishes from this visit"
       />
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+      <div className="mt-4 grid min-w-0 max-w-full gap-3 lg:grid-cols-2">
         {dishDrafts.length === 0 ? (
           <div className="rounded-card border border-dashed border-border bg-bg p-4">
             <p className="font-display text-xl font-semibold text-ink-primary">
@@ -798,12 +798,12 @@ function VisitDishPreview({
 
         {dishDrafts.map((dish, index) => (
           <article
-            className="rounded-card border border-border bg-bg p-4 shadow-card"
+            className="min-w-0 rounded-card border border-border bg-bg p-4 shadow-card"
             key={`${dish.name}-${index}`}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <p className="truncate font-display text-xl font-semibold text-ink-primary">
+                <p className="break-words font-display text-xl font-semibold text-ink-primary">
                   {dish.name}
                 </p>
                 <p className="mt-1 text-sm font-semibold text-success">
@@ -815,7 +815,7 @@ function VisitDishPreview({
                   </p>
                 ) : null}
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 items-center justify-between gap-2 sm:justify-end">
                 {dish.rating ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold text-ink-primary">
                     <Star
@@ -841,7 +841,7 @@ function VisitDishPreview({
         ))}
 
         <button
-          className="flex min-h-[112px] items-center justify-center gap-2 rounded-card border border-dashed border-accent/40 bg-accent-soft px-4 text-sm font-bold text-accent transition hover:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          className="flex min-h-[96px] items-center justify-center gap-2 rounded-card border border-dashed border-accent/40 bg-accent-soft px-4 text-sm font-bold text-accent transition hover:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft sm:min-h-[112px]"
           type="button"
           onClick={onAddDish}
         >
@@ -903,15 +903,15 @@ function AddDishDialog({
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-end bg-bg/80 p-3 backdrop-blur sm:items-center sm:justify-center"
+      className="fixed inset-0 z-[70] flex items-end overflow-x-hidden bg-bg/80 p-0 backdrop-blur sm:items-center sm:justify-center sm:p-4"
       role="dialog"
     >
       <form
-        className="max-h-[92vh] w-full overflow-y-auto rounded-card border border-border bg-surface shadow-raised sm:max-w-xl"
+        className="max-h-[calc(100svh-12px)] w-full max-w-full overflow-x-hidden overflow-y-auto rounded-t-[28px] border border-b-0 border-border bg-surface shadow-raised sm:max-h-[92vh] sm:max-w-xl sm:rounded-card sm:border"
         noValidate
         onSubmit={handleSubmit(submitDish)}
       >
-        <div className="relative overflow-hidden border-b border-border p-5">
+        <div className="relative overflow-hidden border-b border-border p-4 sm:p-5">
           <img
             alt=""
             className="absolute inset-0 h-full w-full object-cover opacity-20"
@@ -923,7 +923,7 @@ function AddDishDialog({
               <p className="text-xs font-bold uppercase text-accent">
                 First visit
               </p>
-              <h2 className="mt-2 font-display text-3xl font-semibold text-ink-primary">
+              <h2 className="mt-2 break-words font-display text-2xl font-semibold text-ink-primary sm:text-3xl">
                 Add a dish
               </h2>
             </div>
@@ -938,7 +938,7 @@ function AddDishDialog({
           </div>
         </div>
 
-        <div className="grid gap-4 p-5">
+        <div className="grid min-w-0 gap-4 p-4 sm:p-5">
           <DishField
             error={errors.name?.message}
             icon={Utensils}
@@ -955,8 +955,8 @@ function AddDishDialog({
             >
               Dish rating
             </label>
-            <div className="mt-2 rounded-control border border-border bg-surface-sunken p-3 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
-              <div className="flex items-center justify-between gap-3">
+            <div className="mt-2 min-w-0 rounded-control border border-border bg-surface-sunken p-3 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="font-display text-3xl font-semibold text-ink-primary">
                   {selectedRating > 0 ? selectedRating.toFixed(1) : "0.0"}
                   <span className="ml-1 text-base font-bold text-ink-secondary">
@@ -964,7 +964,7 @@ function AddDishDialog({
                   </span>
                 </p>
                 <input
-                  className="h-11 w-20 rounded-control border border-border bg-bg px-3 text-center text-base font-bold text-ink-primary outline-none focus:border-accent"
+                  className="h-11 w-full min-w-0 rounded-control border border-border bg-bg px-3 text-center text-base font-bold text-ink-primary outline-none focus:border-accent sm:w-20"
                   id="dishRating"
                   inputMode="decimal"
                   max="10"
@@ -977,7 +977,7 @@ function AddDishDialog({
                   {...register("rating")}
                 />
               </div>
-              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              <div className="mt-3 flex max-w-full flex-wrap gap-2">
                 {quickRatings.map((rating) => (
                   <button
                     className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
@@ -1043,7 +1043,7 @@ function AddDishDialog({
           </label>
         </div>
 
-        <div className="grid gap-3 border-t border-border p-5 sm:grid-cols-2">
+        <div className="sticky bottom-0 grid gap-3 border-t border-border bg-surface p-4 pb-[calc(16px+env(safe-area-inset-bottom))] sm:static sm:grid-cols-2 sm:p-5">
           <button
             className="min-h-12 rounded-control border border-border bg-bg px-5 text-sm font-bold text-ink-primary transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
             type="button"
@@ -1085,7 +1085,7 @@ function DishField({
       <label className="text-sm font-bold text-ink-primary" htmlFor={id}>
         {label}
       </label>
-      <div className="mt-2 flex min-h-12 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+      <div className="mt-2 flex min-h-12 min-w-0 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
         <Icon
           aria-hidden="true"
           className="shrink-0 text-ink-secondary"
@@ -1137,14 +1137,14 @@ function Field({
         {label}
         {required ? <span className="text-accent"> *</span> : null}
       </label>
-      <div className="mt-2 flex min-h-12 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+      <div className="mt-2 flex min-h-12 min-w-0 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
         <Icon
           aria-hidden="true"
           className="shrink-0 text-ink-secondary"
           size={19}
         />
         <input
-          className="min-w-0 flex-1 border-0 bg-transparent py-3 text-base text-ink-primary outline-none placeholder:text-ink-tertiary"
+          className="w-full min-w-0 flex-1 border-0 bg-transparent py-3 text-base text-ink-primary outline-none placeholder:text-ink-tertiary"
           id={id}
           placeholder={placeholder}
           type={type}

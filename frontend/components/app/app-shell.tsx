@@ -23,9 +23,9 @@ const navItems: Array<{
 
 export function AppShell({ activeItem = "Home", children }: AppShellProps) {
   return (
-    <div className="min-h-svh overflow-x-hidden bg-bg text-ink-primary">
+    <div className="min-h-svh w-full max-w-full overflow-x-hidden bg-bg text-ink-primary">
       <DesktopSidebar activeItem={activeItem} />
-      <div className="min-h-svh overflow-x-hidden pb-[calc(112px+env(safe-area-inset-bottom))] lg:pb-0 lg:pl-72">
+      <div className="min-h-svh w-full max-w-full overflow-x-hidden pb-[calc(148px+env(safe-area-inset-bottom))] lg:pb-0 lg:pl-72">
         {children}
       </div>
       <BottomNav activeItem={activeItem} />

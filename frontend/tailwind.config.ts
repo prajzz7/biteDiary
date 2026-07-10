@@ -41,8 +41,9 @@ const config: Config = {
         soft: "0 16px 44px rgba(5, 4, 3, 0.26), inset 0 1px 0 rgba(246, 237, 222, 0.04)",
       },
       fontFamily: {
-        display: "var(--font-display)",
-        ui: "var(--font-ui)",
+        display: "var(--font-display), Georgia, serif",
+        body: "var(--font-body), system-ui, sans-serif",
+        ui: "var(--font-body), system-ui, sans-serif",
       },
     },
   },

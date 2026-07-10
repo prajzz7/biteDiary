@@ -16,8 +16,7 @@
   --success: #67a36b;
   --error: #e36c61;
   --border: #40372d;
-  --font-display: Georgia, "Times New Roman", serif;
-  --font-ui: Inter, Geist, "Segoe UI", Arial, sans-serif;
+  --font-ui: var(--font-body);
   --background: var(--bg);
   --surface-muted: var(--surface-sunken);
   --text: var(--ink-primary);
@@ -76,10 +75,18 @@ body {
     radial-gradient(circle at top, rgba(209, 154, 82, 0.12), transparent 34rem),
     linear-gradient(180deg, #151311 0%, var(--bg) 46rem);
   color: var(--ink-primary);
-  font-family: var(--font-ui);
+  font-family: var(--font-body), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-x: none;
   text-rendering: geometricPrecision;
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+.font-body {
+  font-family: var(--font-body), system-ui, sans-serif;
 }
 
 button,
@@ -87,11 +94,20 @@ input,
 textarea,
 select {
   font: inherit;
+  max-width: 100%;
+  min-width: 0;
 }
 
 button,
 a {
   -webkit-tap-highlight-color: transparent;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 .app-shell {

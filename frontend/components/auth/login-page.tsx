@@ -107,7 +107,7 @@ export default function LoginPage() {
       headerPrompt="New to BiteDiary?"
       mobileTitle="Log in and keep your food story fresh."
     >
-      <section className="rounded-card border border-border bg-surface p-5 shadow-card sm:p-6">
+      <section className="rounded-card border border-border bg-surface p-5 shadow-card sm:p-6 mb-4">
         <div className="mb-7">
           <div className="mb-5 flex items-center justify-between">
             <span className="rounded-full bg-accent-soft px-3 py-1.5 text-xs font-bold uppercase text-accent">

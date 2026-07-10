@@ -117,13 +117,16 @@ export default function SignUpPage() {
       headerPrompt="Already tracking?"
       mobileTitle="Create your BiteDiary in under a minute."
     >
-      <section className="rounded-card border border-border bg-surface p-5 shadow-card sm:p-6">
+      <section className="rounded-card border border-border bg-surface p-5 shadow-card sm:p-6 mb-4">
         <div className="mb-6">
           <div className="mb-5 flex items-center justify-between">
             <span className="rounded-full bg-accent-soft px-3 py-1.5 text-xs font-bold uppercase text-accent">
               New account
             </span>
-            <Link className="hidden text-sm font-bold text-accent hover:text-accent-hover lg:inline" href="/login">
+            <Link
+              className="hidden text-sm font-bold text-accent hover:text-accent-hover lg:inline"
+              href="/login"
+            >
               Sign in
             </Link>
           </div>
@@ -137,13 +140,24 @@ export default function SignUpPage() {
 
         <StatusMessage status={status} />
 
-        <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
+        <form
+          className="space-y-4"
+          onSubmit={handleSubmit(onSubmit)}
+          noValidate
+        >
           <div>
-            <label className="text-sm font-bold text-ink-primary" htmlFor="name">
+            <label
+              className="text-sm font-bold text-ink-primary"
+              htmlFor="name"
+            >
               Name
             </label>
             <div className="mt-2 flex min-h-12 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
-              <UserRound aria-hidden="true" className="shrink-0 text-ink-secondary" size={19} />
+              <UserRound
+                aria-hidden="true"
+                className="shrink-0 text-ink-secondary"
+                size={19}
+              />
               <input
                 id="name"
                 type="text"
@@ -156,18 +170,28 @@ export default function SignUpPage() {
               />
             </div>
             {errors.name ? (
-              <p className="mt-2 text-sm font-semibold text-error" id="name-error">
+              <p
+                className="mt-2 text-sm font-semibold text-error"
+                id="name-error"
+              >
                 {errors.name.message}
               </p>
             ) : null}
           </div>
 
           <div>
-            <label className="text-sm font-bold text-ink-primary" htmlFor="email">
+            <label
+              className="text-sm font-bold text-ink-primary"
+              htmlFor="email"
+            >
               Email
             </label>
             <div className="mt-2 flex min-h-12 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
-              <Mail aria-hidden="true" className="shrink-0 text-ink-secondary" size={19} />
+              <Mail
+                aria-hidden="true"
+                className="shrink-0 text-ink-secondary"
+                size={19}
+              />
               <input
                 id="email"
                 type="email"
@@ -180,7 +204,10 @@ export default function SignUpPage() {
               />
             </div>
             {errors.email ? (
-              <p className="mt-2 text-sm font-semibold text-error" id="email-error">
+              <p
+                className="mt-2 text-sm font-semibold text-error"
+                id="email-error"
+              >
                 {errors.email.message}
               </p>
             ) : null}
@@ -216,9 +243,13 @@ export default function SignUpPage() {
               {...register("terms")}
             />
             <span>
-              Keep my BiteDiary private and create my account with these details.
+              Keep my BiteDiary private and create my account with these
+              details.
               {errors.terms ? (
-                <span className="mt-1 block text-sm font-semibold text-error" id="terms-error">
+                <span
+                  className="mt-1 block text-sm font-semibold text-error"
+                  id="terms-error"
+                >
                   {errors.terms.message}
                 </span>
               ) : null}
@@ -232,7 +263,11 @@ export default function SignUpPage() {
           >
             {isLoading ? (
               <>
-                <LoaderCircle aria-hidden="true" className="animate-spin" size={19} />
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="animate-spin"
+                  size={19}
+                />
                 Creating account
               </>
             ) : (
@@ -275,7 +310,11 @@ function PasswordField({
         {label}
       </label>
       <div className="mt-2 flex min-h-12 items-center gap-3 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
-        <LockKeyhole aria-hidden="true" className="shrink-0 text-ink-secondary" size={19} />
+        <LockKeyhole
+          aria-hidden="true"
+          className="shrink-0 text-ink-secondary"
+          size={19}
+        />
         <input
           id={id}
           type={showPassword ? "text" : "password"}
@@ -287,12 +326,20 @@ function PasswordField({
           {...register}
         />
         <button
-          aria-label={showPassword ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+          aria-label={
+            showPassword
+              ? `Hide ${label.toLowerCase()}`
+              : `Show ${label.toLowerCase()}`
+          }
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-ink-secondary transition hover:bg-surface hover:text-ink-primary focus:outline-none focus:ring-4 focus:ring-accent-soft"
           type="button"
           onClick={togglePassword}
         >
-          {showPassword ? <EyeOff aria-hidden="true" size={19} /> : <Eye aria-hidden="true" size={19} />}
+          {showPassword ? (
+            <EyeOff aria-hidden="true" size={19} />
+          ) : (
+            <Eye aria-hidden="true" size={19} />
+          )}
         </button>
       </div>
       {error ? (
@@ -311,8 +358,14 @@ function StatusMessage({ status }: { status: SubmitStatus }) {
         className="mb-5 flex items-start gap-3 rounded-control border border-success/30 bg-success/10 p-4 text-sm text-success"
         role="status"
       >
-        <CheckCircle2 aria-hidden="true" className="mt-0.5 shrink-0" size={18} />
-        <p className="m-0 font-semibold">Account ready. Opening your diary...</p>
+        <CheckCircle2
+          aria-hidden="true"
+          className="mt-0.5 shrink-0"
+          size={18}
+        />
+        <p className="m-0 font-semibold">
+          Account ready. Opening your diary...
+        </p>
       </div>
     );
   }
