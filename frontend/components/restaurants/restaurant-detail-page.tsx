@@ -8,6 +8,7 @@ import { z } from "zod";
 import {
   AlertCircle,
   ArrowLeft,
+  Bookmark,
   CalendarDays,
   CheckCircle2,
   ChefHat,
@@ -551,46 +552,56 @@ function HeroCard({ restaurant }: { restaurant: Restaurant }) {
   const cuisine = restaurant.cuisine || "Cuisine not set";
 
   return (
-    <header className="overflow-hidden border-b border-border/80 bg-bg">
-      <div className="flex min-h-[68px] items-center justify-between px-5 sm:px-8">
+    <header className="relative min-h-[260px] overflow-hidden border-b border-border/80 bg-bg sm:min-h-[300px]">
+      <img
+        alt="Warm restaurant table"
+        className="absolute inset-0 h-full w-full object-cover opacity-65"
+        src={
+          restaurant?.bannerImageUrl
+            ? restaurant?.bannerImageUrl
+            : "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80"
+        }
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(16,15,13,0.52)_0%,rgba(16,15,13,0.16)_38%,rgba(16,15,13,0.86)_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(209,154,82,0.18),transparent_36%),linear-gradient(90deg,rgba(16,15,13,0.36),transparent_44%,rgba(16,15,13,0.18))]" />
+
+      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pt-4 sm:px-6 sm:pt-5">
         <Link
           aria-label="Back to restaurants"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full text-accent/90 transition hover:bg-accent-soft hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-bg/45 text-ink-primary shadow-card backdrop-blur transition hover:border-accent/45 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
           href="/restaurants"
         >
-          <ArrowLeft aria-hidden="true" size={24} />
+          <ArrowLeft aria-hidden="true" size={20} />
         </Link>
-        <button
-          aria-label="Restaurant options"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full text-accent/90 transition hover:bg-accent-soft hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
-          type="button"
-        >
-          <MoreVertical aria-hidden="true" size={24} />
-        </button>
+
+        <div className="flex items-center gap-2">
+          <button
+            aria-label="Save restaurant"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-bg/45 text-ink-primary shadow-card backdrop-blur transition hover:border-accent/45 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            type="button"
+          >
+            <Bookmark aria-hidden="true" size={18} />
+          </button>
+          <button
+            aria-label="Restaurant options"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-bg/45 text-ink-primary shadow-card backdrop-blur transition hover:border-accent/45 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            type="button"
+          >
+            <MoreVertical aria-hidden="true" size={19} />
+          </button>
+        </div>
       </div>
 
-      <div className="relative min-h-[300px] bg-[radial-gradient(circle_at_25%_20%,rgba(209,154,82,0.24),transparent_34%),linear-gradient(145deg,#2b2118,#100f0d)] sm:min-h-[330px]">
-        <img
-          alt="Warm restaurant table"
-          className="absolute inset-0 h-full w-full object-cover opacity-55"
-          src={
-            restaurant?.bannerImageUrl
-              ? restaurant?.bannerImageUrl
-              : "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80"
-          }
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/72 to-bg/10" />
-        <div className="relative flex min-h-[300px] flex-col justify-end px-5 pb-8 sm:min-h-[330px] sm:px-8 sm:pb-10">
-          <h1 className="break-words font-display text-[36px] font-bold leading-[0.95] tracking-[-0.025em] text-ink-primary sm:text-[46px]">
-            {restaurant.name}
-          </h1>
-          <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold text-ink-secondary">
-            <InfoPill icon={ChefHat} label={cuisine} />
-            <span className="hidden h-5 w-px bg-border/70 sm:block" />
-            <InfoPill icon={MapPin} label={location} />
-            <span className="hidden h-5 w-px bg-border/70 sm:block" />
-            <RatingPill rating={restaurant.rating} />
-          </div>
+      <div className="relative z-10 flex min-h-[260px] flex-col justify-end px-5 pb-7 sm:min-h-[300px] sm:px-7 sm:pb-8">
+        <h1 className="break-words font-display text-[34px] font-bold leading-[0.95] tracking-[-0.025em] text-ink-primary sm:text-[42px]">
+          {restaurant.name}
+        </h1>
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] font-semibold text-ink-secondary">
+          <InfoPill icon={ChefHat} label={cuisine} />
+          <span className="h-1 w-1 rounded-full bg-accent/80" />
+          <InfoPill icon={MapPin} label={location} />
+          <span className="h-1 w-1 rounded-full bg-accent/80" />
+          <HeroRatingMeta rating={restaurant.rating} />
         </div>
       </div>
     </header>
@@ -841,7 +852,9 @@ function DesktopVisitPanel({
 
       {visitsView === "loading" ? <VisitsLoadingState /> : null}
       {visitsView === "error" ? <VisitsErrorState onRetry={onRetry} /> : null}
-      {visitsView === "empty" ? <VisitsEmptyState onLogVisit={onLogVisit} /> : null}
+      {visitsView === "empty" ? (
+        <VisitsEmptyState onLogVisit={onLogVisit} />
+      ) : null}
       {visitsView === "ready" ? (
         <div className="mt-5 space-y-4">
           {visits.map((visit, index) => (
@@ -1030,19 +1043,21 @@ function VisitHistorySection({
     >
       <div className="flex items-center justify-between gap-4">
         <SectionEyebrow id="visit-history-title">Visit history</SectionEyebrow>
-        <button
+        {/* <button
           className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 text-sm font-semibold text-success transition hover:bg-success/15 focus:outline-none focus:ring-4 focus:ring-accent-soft"
           type="button"
           onClick={onLogVisit}
         >
           <PlusCircle aria-hidden="true" size={16} />
           Revisit
-        </button>
+        </button> */}
       </div>
 
       {visitsView === "loading" ? <VisitsLoadingState /> : null}
       {visitsView === "error" ? <VisitsErrorState onRetry={onRetry} /> : null}
-      {visitsView === "empty" ? <VisitsEmptyState onLogVisit={onLogVisit} /> : null}
+      {visitsView === "empty" ? (
+        <VisitsEmptyState onLogVisit={onLogVisit} />
+      ) : null}
       {visitsView === "ready" ? (
         <div className="mt-5 divide-y divide-[rgba(64,55,45,0.65)]">
           {visits.map((visit, index) => (
@@ -1401,7 +1416,10 @@ function BannerImageField({
   return (
     <section className="lg:col-span-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <label className="text-sm font-bold text-ink-primary" htmlFor="bannerImage">
+        <label
+          className="text-sm font-bold text-ink-primary"
+          htmlFor="bannerImage"
+        >
           Banner image
         </label>
         {hasSelectedImage ? (
@@ -1509,7 +1527,11 @@ function ActionPanel({
       ) : (
         <SectionEyebrow>Actions</SectionEyebrow>
       )}
-      <div className={desktop ? "mt-4 grid gap-2" : "mt-5 grid gap-3 sm:grid-cols-2"}>
+      <div
+        className={
+          desktop ? "mt-4 grid gap-2" : "mt-5 grid gap-3 sm:grid-cols-2"
+        }
+      >
         <button
           className={`flex min-h-[52px] items-center justify-center gap-3 rounded-control px-4 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-60 ${
             desktop
@@ -2209,13 +2231,7 @@ function Field({
   );
 }
 
-function SectionEyebrow({
-  children,
-  id,
-}: {
-  children: string;
-  id?: string;
-}) {
+function SectionEyebrow({ children, id }: { children: string; id?: string }) {
   return (
     <p
       className="text-left text-xs font-[800] uppercase tracking-[0.12em] text-accent"
@@ -2242,9 +2258,7 @@ function DetailRow({
         className="mt-0.5 shrink-0 text-ink-tertiary sm:mt-0"
         size={20}
       />
-      <p className="text-sm font-semibold text-ink-secondary">
-        {label}
-      </p>
+      <p className="text-sm font-semibold text-ink-secondary">{label}</p>
       <p className="min-w-0 break-words text-right text-sm font-bold leading-6 text-ink-primary">
         {value}
       </p>
@@ -2255,11 +2269,7 @@ function DetailRow({
 function InfoPill({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
     <span className="inline-flex min-h-8 min-w-0 items-center gap-2 text-sm font-semibold text-ink-secondary">
-      <Icon
-        aria-hidden="true"
-        className="shrink-0 text-accent"
-        size={18}
-      />
+      <Icon aria-hidden="true" className="shrink-0 text-accent" size={18} />
       {label}
     </span>
   );
@@ -2283,12 +2293,24 @@ function RatingPill({ rating }: { rating?: number | null }) {
   );
 }
 
+function HeroRatingMeta({ rating }: { rating?: number | null }) {
+  return (
+    <span className="inline-flex min-h-8 min-w-0 items-center gap-2 text-[13px] font-semibold text-ink-secondary">
+      <Star
+        aria-hidden="true"
+        className="shrink-0 text-accent"
+        fill={rating === undefined || rating === null ? "none" : "currentColor"}
+        size={16}
+      />
+      {rating === undefined || rating === null ? "Not rated" : `${rating.toFixed(1)}/10`}
+    </span>
+  );
+}
+
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid min-h-[50px] min-w-0 grid-cols-[minmax(90px,0.8fr)_minmax(0,1.2fr)] items-center gap-4 py-3 first:pt-0 last:pb-0">
-      <p className="text-[13px] font-semibold text-ink-secondary">
-        {label}
-      </p>
+      <p className="text-[13px] font-semibold text-ink-secondary">{label}</p>
       <p className="min-w-0 break-words text-right text-sm font-semibold text-ink-primary">
         {value}
       </p>

@@ -527,7 +527,7 @@ export default function AddRestaurantPage() {
                 }
               />
 
-              <div className="sticky bottom-[calc(112px+env(safe-area-inset-bottom))] z-20 rounded-card border border-border bg-surface/95 p-3 shadow-raised backdrop-blur lg:static lg:p-0 lg:shadow-none">
+              <div className="pt-2">
                 <button
                   className="flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-accent px-5 py-3 text-base font-bold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-wait disabled:opacity-70"
                   disabled={isLoading}
@@ -783,10 +783,10 @@ function VisitDishPreview({
         title="Dishes from this visit"
       />
 
-      <div className="mt-4 grid min-w-0 max-w-full gap-3 lg:grid-cols-2">
+      <div className="mt-4 grid min-w-0 max-w-full gap-3 sm:grid-cols-2">
         {dishDrafts.length === 0 ? (
-          <div className="rounded-card border border-dashed border-border bg-bg p-4">
-            <p className="font-display text-xl font-semibold text-ink-primary">
+          <div className="min-w-0 rounded-card border border-dashed border-border bg-bg p-4 sm:col-span-2">
+            <p className="break-words font-display text-lg font-semibold text-ink-primary">
               No dishes added yet
             </p>
             <p className="mt-2 text-sm leading-6 text-ink-secondary">
@@ -798,24 +798,24 @@ function VisitDishPreview({
 
         {dishDrafts.map((dish, index) => (
           <article
-            className="min-w-0 rounded-card border border-border bg-bg p-4 shadow-card"
+            className="min-w-0 overflow-hidden rounded-card border border-border bg-bg p-4 shadow-card"
             key={`${dish.name}-${index}`}
           >
-            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="break-words font-display text-xl font-semibold text-ink-primary">
+                <p className="break-words font-display text-lg font-semibold leading-tight text-ink-primary">
                   {dish.name}
                 </p>
-                <p className="mt-1 text-sm font-semibold text-success">
+                <p className="mt-1 text-xs font-semibold text-success">
                   {dish.wouldEatAgain ? "Would eat again" : "Maybe skip next time"}
                 </p>
                 {dish.notes ? (
-                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-ink-secondary">
+                  <p className="mt-2 line-clamp-2 break-words text-sm leading-6 text-ink-secondary">
                     {dish.notes}
                   </p>
                 ) : null}
               </div>
-              <div className="flex shrink-0 items-center justify-between gap-2 sm:justify-end">
+              <div className="flex shrink-0 flex-col items-end gap-2">
                 {dish.rating ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1 text-xs font-bold text-ink-primary">
                     <Star
@@ -841,7 +841,9 @@ function VisitDishPreview({
         ))}
 
         <button
-          className="flex min-h-[96px] items-center justify-center gap-2 rounded-card border border-dashed border-accent/40 bg-accent-soft px-4 text-sm font-bold text-accent transition hover:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft sm:min-h-[112px]"
+          className={`flex min-h-14 items-center justify-center gap-2 rounded-card border border-dashed border-accent/40 bg-accent-soft px-4 text-sm font-bold text-accent transition hover:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft ${
+            dishDrafts.length === 0 ? "sm:col-span-2" : "sm:min-h-[96px]"
+          }`}
           type="button"
           onClick={onAddDish}
         >
@@ -903,27 +905,27 @@ function AddDishDialog({
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-[70] flex items-end overflow-x-hidden bg-bg/80 p-0 backdrop-blur sm:items-center sm:justify-center sm:p-4"
+      className="fixed inset-0 z-[70] flex items-end justify-center overflow-x-hidden bg-bg/80 p-0 backdrop-blur sm:items-center sm:p-4"
       role="dialog"
     >
       <form
-        className="max-h-[calc(100svh-12px)] w-full max-w-full overflow-x-hidden overflow-y-auto rounded-t-[28px] border border-b-0 border-border bg-surface shadow-raised sm:max-h-[92vh] sm:max-w-xl sm:rounded-card sm:border"
+        className="mx-2 max-h-[calc(100svh-8px)] w-[calc(100%-16px)] max-w-md overflow-x-hidden overflow-y-auto rounded-t-[24px] border border-b-0 border-border bg-surface shadow-raised sm:max-h-[92vh] sm:max-w-xl sm:rounded-card sm:border"
         noValidate
         onSubmit={handleSubmit(submitDish)}
       >
-        <div className="relative overflow-hidden border-b border-border p-4 sm:p-5">
+        <div className="relative overflow-hidden border-b border-border p-4">
           <img
             alt=""
             className="absolute inset-0 h-full w-full object-cover opacity-20"
             src="https://images.unsplash.com/photo-1559329007-40df8a9345d8?auto=format&fit=crop&w=1000&q=80"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/90 to-bg/40" />
-          <div className="relative flex items-start justify-between gap-4">
-            <div>
+          <div className="relative flex min-w-0 items-start justify-between gap-4">
+            <div className="min-w-0">
               <p className="text-xs font-bold uppercase text-accent">
                 First visit
               </p>
-              <h2 className="mt-2 break-words font-display text-2xl font-semibold text-ink-primary sm:text-3xl">
+              <h2 className="mt-1 break-words font-display text-2xl font-semibold leading-tight text-ink-primary sm:text-3xl">
                 Add a dish
               </h2>
             </div>
@@ -956,15 +958,15 @@ function AddDishDialog({
               Dish rating
             </label>
             <div className="mt-2 min-w-0 rounded-control border border-border bg-surface-sunken p-3 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
-              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="font-display text-3xl font-semibold text-ink-primary">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_74px] items-center gap-3">
+                <p className="min-w-0 font-display text-2xl font-semibold text-ink-primary">
                   {selectedRating > 0 ? selectedRating.toFixed(1) : "0.0"}
-                  <span className="ml-1 text-base font-bold text-ink-secondary">
+                  <span className="ml-1 text-sm font-bold text-ink-secondary">
                     /10
                   </span>
                 </p>
                 <input
-                  className="h-11 w-full min-w-0 rounded-control border border-border bg-bg px-3 text-center text-base font-bold text-ink-primary outline-none focus:border-accent sm:w-20"
+                  className="h-10 w-full min-w-0 rounded-control border border-border bg-bg px-2 text-center text-sm font-bold text-ink-primary outline-none focus:border-accent"
                   id="dishRating"
                   inputMode="decimal"
                   max="10"
@@ -977,10 +979,10 @@ function AddDishDialog({
                   {...register("rating")}
                 />
               </div>
-              <div className="mt-3 flex max-w-full flex-wrap gap-2">
+              <div className="mt-3 grid max-w-full grid-cols-3 gap-2">
                 {quickRatings.map((rating) => (
                   <button
-                    className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
+                    className={`min-h-9 min-w-0 rounded-full border px-2 text-xs font-bold transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
                       selectedRating === rating
                         ? "border-accent/40 bg-accent-soft text-accent"
                         : "border-border bg-bg text-ink-secondary hover:border-accent/40 hover:text-ink-primary"
@@ -1018,7 +1020,7 @@ function AddDishDialog({
             </label>
             <div className="mt-2 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
               <textarea
-                className="min-h-24 w-full resize-y border-0 bg-transparent py-3 text-base leading-6 text-ink-primary outline-none placeholder:text-ink-tertiary"
+                className="min-h-20 w-full resize-y border-0 bg-transparent py-3 text-sm leading-6 text-ink-primary outline-none placeholder:text-ink-tertiary"
                 id="dishNotes"
                 placeholder="Would reorder, spicy, share next time..."
                 {...register("notes")}
@@ -1026,33 +1028,33 @@ function AddDishDialog({
             </div>
           </div>
 
-          <label className="flex min-h-12 items-center justify-between gap-4 rounded-control border border-border bg-bg px-4 py-3">
-            <span>
+          <label className="flex min-h-12 min-w-0 items-center justify-between gap-3 rounded-control border border-border bg-bg px-4 py-3">
+            <span className="min-w-0">
               <span className="block text-sm font-bold text-ink-primary">
                 Would eat again
               </span>
-              <span className="mt-1 block text-xs font-semibold text-ink-tertiary">
+              <span className="mt-1 block break-words text-xs font-semibold text-ink-tertiary">
                 Mark this as a reorder-worthy dish.
               </span>
             </span>
             <input
-              className="h-5 w-5 accent-[var(--color-accent)]"
+              className="h-5 w-5 shrink-0 accent-[var(--color-accent)]"
               type="checkbox"
               {...register("wouldEatAgain")}
             />
           </label>
         </div>
 
-        <div className="sticky bottom-0 grid gap-3 border-t border-border bg-surface p-4 pb-[calc(16px+env(safe-area-inset-bottom))] sm:static sm:grid-cols-2 sm:p-5">
+        <div className="sticky bottom-0 grid grid-cols-2 gap-3 border-t border-border bg-surface p-4 pb-[calc(16px+env(safe-area-inset-bottom))] sm:static sm:p-5">
           <button
-            className="min-h-12 rounded-control border border-border bg-bg px-5 text-sm font-bold text-ink-primary transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            className="min-h-12 min-w-0 rounded-control border border-border bg-bg px-4 text-sm font-bold text-ink-primary transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
             type="button"
             onClick={onCancel}
           >
             Cancel
           </button>
           <button
-            className="min-h-12 rounded-control bg-accent px-5 text-sm font-bold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            className="min-h-12 min-w-0 rounded-control bg-accent px-4 text-sm font-bold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
             type="submit"
           >
             Add dish
