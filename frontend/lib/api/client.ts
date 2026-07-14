@@ -31,6 +31,11 @@ export type Restaurant = {
 };
 
 export type Dish = {
+  dishImages?: Array<{
+    dishImagePublicId?: string | null;
+    dishImageUrl: string;
+    id?: string;
+  }>;
   id: string;
   name: string;
   notes?: string | null;
@@ -304,7 +309,10 @@ export const restaurantsApi = {
     );
   },
 
-  createVisit(restaurantId: string, values: CreateRestaurantVisitPayload) {
+  createVisit(
+    restaurantId: string,
+    values: CreateRestaurantVisitPayload | FormData,
+  ) {
     return apiRequest<{ data: RestaurantVisit; message: string }>(
       `/restaurants/${restaurantId}/visits`,
       {

@@ -78,7 +78,6 @@ function parseOptionalRating(value: RestaurantPayload["rating"]) {
   ) {
     throw new BadRequestError("Rating must be between 0 and 10 in 0.5 steps.");
   }
-
   return rating;
 }
 
@@ -125,6 +124,22 @@ function getQueryString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+const cloudinaryFolderName =
+  process.env.NODE_ENV === "production" ? "prod" : "dev";
+
+type ImagesDataType = {
+  fieldname?: string;
+  originalname?: string;
+  encoding?: string;
+  mimetype?: string;
+  path?: string;
+  destination?: string;
+  filename?: string;
+  size?: Number;
+};
+
+type ImagesDataMapType = Record<string, ImagesDataType[]>;
+
 router.post("/", upload.single("bannerImage"), async (req, res) => {
   try {
     if (!req.user) {
@@ -136,9 +151,6 @@ router.post("/", upload.single("bannerImage"), async (req, res) => {
     let bannerImageUrl: string | undefined;
     let bannerImagePublicId: string | undefined;
 
-    const cloudinaryFolderName =
-      process.env.NODE_ENV === "production" ? "prod" : "dev";
-
     if (req.file) {
       const uploadResult = await cloudinary.uploader.upload(req.file.path, {
         asset_folder: `bite-diary/${cloudinaryFolderName}/restaurants`,
@@ -149,8 +161,6 @@ router.post("/", upload.single("bannerImage"), async (req, res) => {
       bannerImagePublicId = uploadResult.public_id;
 
       await unlink(req.file.path);
-      console.log("req.file", req.file);
-      console.log("uploadResult", uploadResult);
     }
 
     const {
@@ -612,7 +622,11 @@ router.get("/:restaurantId/visits", async (req, res) => {
         userId: req.user.id,
       },
       include: {
-        dishes: true,
+        dishes: {
+          include: {
+            dishImages: true,
+          },
+        },
       },
       orderBy: [{ visitedAt: "desc" }],
     });
@@ -629,7 +643,7 @@ router.get("/:restaurantId/visits", async (req, res) => {
   }
 });
 
-router.post("/:restaurantId/visits", async (req, res) => {
+router.post("/:restaurantId/visits", upload.any(), async (req, res) => {
   const restaurantId = req.params.restaurantId;
   try {
     if (!req.user) {
@@ -653,7 +667,24 @@ router.post("/:restaurantId/visits", async (req, res) => {
       dishRating,
       dishNotes,
       wouldEatAgain,
+      dishList,
     } = req.body;
+
+    const { dishImages } = req?.files;
+
+    let imagesDataMap: ImagesDataMapType = {};
+
+    if (req.files) {
+      const seen = new Set();
+      (req?.files || [])?.forEach((imageData) => {
+        const id = imageData.fieldname.split("^")?.[1];
+        seen.has(id)
+          ? imagesDataMap[id].push(imageData)
+          : (imagesDataMap[id] = [imageData]);
+
+        seen.add(id);
+      });
+    }
 
     const restaurant = await prisma.restaurant.findFirst({
       where: {
@@ -668,6 +699,38 @@ router.post("/:restaurantId/visits", async (req, res) => {
       });
     }
 
+    const createDishImageArray = async (imageList) => {
+      const dishImagesCloudinaryUrl = [];
+
+      for (const image of imageList) {
+        try {
+          const uploadResult = await cloudinary.uploader.upload(image.path, {
+            asset_folder: `bite-diary/${cloudinaryFolderName}/dishes`,
+            public_id: `${image.fieldname.split("^")[1]}-${Date.now()}`,
+          });
+
+          dishImagesCloudinaryUrl.push({
+            dishImageUrl: uploadResult.secure_url,
+            dishImagePublicUrl: uploadResult.public_id,
+          });
+        } finally {
+          try {
+            await unlink(image.path);
+          } catch (deleteError: any) {
+            if (deleteError.code !== "ENOENT") {
+              console.error(
+                "Failed to delete temporary image:",
+                image.path,
+                deleteError,
+              );
+            }
+          }
+        }
+      }
+
+      return dishImagesCloudinaryUrl;
+    };
+
     const visit = await prisma.restaurantVisit.create({
       data: {
         visitNotes,
@@ -676,27 +739,49 @@ router.post("/:restaurantId/visits", async (req, res) => {
         totalAmountPaid: parseOptionalAmount(totalAmountPaid),
         restaurantId,
         userId: req.user.id,
+        dishes: {
+          create: await Promise.all(
+            JSON.parse(dishList).map(async (dish) => {
+              return {
+                name: parseOptionalString(dish?.name),
+                rating: parseOptionalRating(dish?.rating),
+                // price         ,
+                notes: parseOptionalString(dish?.notes),
+                wouldEatAgain: dish?.wouldEatAgain,
+
+                // dishImages: dishImagesData(dish)),
+                dishImages: {
+                  create: await createDishImageArray(imagesDataMap[dish.id]),
+                },
+              };
+            }),
+          ),
+        },
       },
       include: {
-        dishes: true,
+        dishes: {
+          include: {
+            dishImages: true,
+          },
+        },
       },
     });
 
-    const parsedDishName = parseOptionalString(dishName);
-    const parsedDishNotes = parseOptionalString(dishNotes);
+    // const parsedDishName = parseOptionalString(dishName);
+    // const parsedDishNotes = parseOptionalString(dishNotes);
 
-    if (visit && parsedDishName) {
-      const dish = await prisma.dish.create({
-        data: {
-          name: parsedDishName,
-          rating: parseOptionalRating(dishRating),
-          notes: parsedDishNotes,
-          wouldEatAgain: parseOptionalBoolean(wouldEatAgain),
+    // if (visit && parsedDishName) {
+    //   const dish = await prisma.dish.create({
+    //     data: {
+    //       name: parsedDishName,
+    //       rating: parseOptionalRating(dishRating),
+    //       notes: parsedDishNotes,
+    //       wouldEatAgain: parseOptionalBoolean(wouldEatAgain),
 
-          restaurantVisitId: visit.id,
-        },
-      });
-    }
+    //       restaurantVisitId: visit.id,
+    //     },
+    //   });
+    // }
 
     return res.status(201).json({
       message: "Visit created successfully",

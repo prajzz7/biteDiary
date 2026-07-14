@@ -79,8 +79,21 @@ model Dish {
   notes         String?
   wouldEatAgain Boolean @default(false)
 
+
   restaurantVisitId String
   restaurantVisit   RestaurantVisit @relation(fields: [restaurantVisitId], references: [id], onDelete: Cascade)
 
+  dishImages DishImages[]
+
   @@index([restaurantVisitId])
+}
+
+model DishImages {
+  id String @id @default(cuid())
+  dishImageUrl String?
+  dishImagePublicUrl String?
+
+  dishId String
+  dish Dish @relation(fields: [dishId], references: [id], onDelete: Cascade)
+
 }

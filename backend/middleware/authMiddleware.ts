@@ -29,7 +29,6 @@ export default function authMiddleware(
   try {
     const userPayload = verifyUserToken(accessToken);
     req.user = userPayload;
-    console.log("req.user ", userPayload);
 
     next();
   } catch (error) {

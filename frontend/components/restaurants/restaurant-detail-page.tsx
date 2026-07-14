@@ -10,6 +10,8 @@ import {
   ArrowLeft,
   Bookmark,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   ChefHat,
   ClipboardPenLine,
@@ -126,6 +128,24 @@ const visitSchema = z.object({
 });
 
 const dishDraftSchema = z.object({
+  id: z.string().trim().optional(),
+  images: z
+    .array(
+      z.custom<File>(
+        (file) => typeof File !== "undefined" && file instanceof File,
+        { message: "Choose valid image files" },
+      ),
+    )
+    .default([])
+    .refine(
+      (files) => files.every((file) => file.size <= MAX_FILE_SIZE),
+      "Each image must be 5MB or smaller",
+    )
+    .refine(
+      (files) =>
+        files.every((file) => ACCEPTED_IMAGE_TYPES.includes(file.type)),
+      "Only .jpg, .png and .webp formats are supported.",
+    ),
   name: z.string().trim().min(2, "Dish name is required"),
   notes: z.string().trim().optional(),
   rating: z
@@ -155,6 +175,13 @@ type VisitsView = "loading" | "ready" | "empty" | "error";
 type MutationStatus = "idle" | "loading" | "success" | "error";
 
 const quickRatings = [10, 9.5, 9, 8.5, 8, 7.5];
+const dishImageUrls = [
+  "https://images.unsplash.com/photo-1617196034796-73dfa7b1fd56?auto=format&fit=crop&w=900&q=80",
+  "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=900&q=80",
+  "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=80",
+  "https://images.unsplash.com/photo-1562967916-eb82221dfb36?auto=format&fit=crop&w=900&q=80",
+  "https://images.unsplash.com/photo-1553621042-f6e147245754?auto=format&fit=crop&w=900&q=80",
+];
 
 export default function RestaurantDetailPage({
   restaurantId,
@@ -508,19 +535,47 @@ function toCreateVisitPayload(
   dishDrafts: DishDraftFormValues[],
 ) {
   const firstDish = dishDrafts[0];
-
-  return {
-    dishName: optionalString(firstDish?.name),
-    dishNotes: optionalString(firstDish?.notes),
-    dishRating: firstDish?.rating ? Number(firstDish.rating) : undefined,
-    rating: values.rating ? Number(values.rating) : undefined,
-    totalAmountPaid: values.totalAmountPaid
-      ? Number(values.totalAmountPaid)
-      : undefined,
-    visitedAt: values.visitedAt || undefined,
-    visitNotes: optionalString(values.visitNotes),
-    wouldEatAgain: firstDish?.wouldEatAgain,
+  const visitFormData = new FormData();
+  const appendValue = (
+    key: string,
+    value: boolean | number | string | undefined,
+  ) => {
+    if (value !== undefined && value !== "") {
+      visitFormData.append(key, String(value));
+    }
   };
+
+  appendValue("dishName", optionalString(firstDish?.name));
+  appendValue("dishNotes", optionalString(firstDish?.notes));
+  appendValue(
+    "dishRating",
+    firstDish?.rating ? Number(firstDish.rating) : undefined,
+  );
+  appendValue("rating", values.rating ? Number(values.rating) : undefined);
+  appendValue(
+    "totalAmountPaid",
+    values.totalAmountPaid ? Number(values.totalAmountPaid) : undefined,
+  );
+  appendValue("visitedAt", values.visitedAt || undefined);
+  appendValue("visitNotes", optionalString(values.visitNotes));
+  appendValue("wouldEatAgain", firstDish?.wouldEatAgain);
+  visitFormData.append(
+    "dishList",
+    JSON.stringify(
+      dishDrafts.map(({ images, ...dish }) => ({
+        ...dish,
+        imageCount: images.length,
+      })),
+    ),
+  );
+
+  dishDrafts.forEach((dish, dishIndex) => {
+    for (const image of dish.images) {
+      visitFormData.append(`dishImages^${dish?.id}`, image);
+    }
+  });
+
+  return visitFormData;
 }
 
 function optionalString(value?: string) {
@@ -536,6 +591,38 @@ function nullableString(value?: string) {
 function getBestDish(visits: RestaurantVisit[]) {
   const allDishes = visits.flatMap((visit) => visit.dishes);
   return allDishes.find((dish) => dish.wouldEatAgain) ?? allDishes[0];
+}
+
+function getFeaturedVisitDish(visit: RestaurantVisit) {
+  return (
+    visit.dishes.find((dish) => dish.wouldEatAgain) ??
+    [...visit.dishes].sort((first, second) => {
+      return (second.rating ?? 0) - (first.rating ?? 0);
+    })[0]
+  );
+}
+
+function getDishImageUrl(dishName: string, index = 0) {
+  const charTotal = dishName
+    .split("")
+    .reduce((total, character) => total + character.charCodeAt(0), index);
+
+  return dishImageUrls[charTotal % dishImageUrls.length];
+}
+
+function getDishRatingText(rating?: number | null) {
+  return rating === undefined || rating === null ? "Not rated" : `${rating}/10`;
+}
+
+function getDishImages(dish: RestaurantVisit["dishes"][number], index = 0) {
+  const savedImages =
+    dish.dishImages
+      ?.map((image) => image.dishImageUrl)
+      .filter((url): url is string => Boolean(url)) ?? [];
+
+  return savedImages.length > 0
+    ? savedImages
+    : [getDishImageUrl(dish.name, index)];
 }
 
 function toDateInputValue(value?: string | null) {
@@ -679,10 +766,10 @@ function DesktopTopBar() {
 
       <div className="flex items-center gap-2">
         <button
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-border bg-bg/70 px-4 text-sm font-semibold text-ink-primary transition hover:border-accent/45 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          className="inline-flex h-[52px] items-center justify-center gap-3 rounded-[16px] border border-border bg-bg/70 px-4 font-body text-[15px] font-medium leading-none text-ink-primary transition hover:border-accent/45 focus:outline-none focus:ring-4 focus:ring-accent-soft"
           type="button"
         >
-          <Share2 aria-hidden="true" size={16} />
+          <Share2 aria-hidden="true" size={18} />
           Share
         </button>
         <button
@@ -743,18 +830,18 @@ function DesktopHero({
         <div className="mt-5 flex flex-wrap gap-3">
           <RatingPill rating={restaurant.rating} />
           <button
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-border bg-bg/80 px-5 text-sm font-semibold text-ink-primary transition hover:border-accent/45 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            className="inline-flex h-[52px] items-center justify-center gap-3 rounded-[16px] border border-border bg-bg/80 px-5 font-body text-[15px] font-medium leading-none text-ink-primary transition hover:border-accent/45 focus:outline-none focus:ring-4 focus:ring-accent-soft"
             type="button"
           >
-            <Star aria-hidden="true" size={15} />
+            <Star aria-hidden="true" size={18} />
             Add to wishlist
           </button>
           <button
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-accent px-7 text-sm font-semibold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            className="inline-flex h-[52px] items-center justify-center gap-3 rounded-[16px] bg-accent px-7 font-body text-[15px] font-semibold leading-none text-[#0F0D0A] shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
             type="button"
             onClick={onLogVisit}
           >
-            <PlusCircle aria-hidden="true" size={16} />
+            <PlusCircle aria-hidden="true" size={18} />
             Log visit
           </button>
         </div>
@@ -842,7 +929,7 @@ function DesktopVisitPanel({
           </p>
         </div>
         <button
-          className="text-sm font-semibold text-accent transition hover:text-accent-hover"
+          className="font-body text-[15px] font-medium leading-none text-accent transition hover:text-accent-hover"
           type="button"
           onClick={onLogVisit}
         >
@@ -879,6 +966,15 @@ function DesktopVisitCard({
   index: number;
   visit: RestaurantVisit;
 }) {
+  const featuredDish = getFeaturedVisitDish(visit);
+  const supportingDishes = visit.dishes
+    .filter((dish) => dish.id !== featuredDish?.id)
+    .slice(0, 2);
+  const hiddenDishCount = Math.max(
+    visit.dishes.length - 1 - supportingDishes.length,
+    0,
+  );
+
   return (
     <article className="rounded-card border border-border bg-bg/35 p-4">
       <div className="flex items-start justify-between gap-4">
@@ -910,22 +1006,12 @@ function DesktopVisitCard({
           </span>
         ) : null}
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {visit.dishes.length > 0 ? (
-          visit.dishes.map((dish) => (
-            <span
-              className="rounded-full border border-border/80 bg-surface px-3 py-1 text-xs font-semibold text-ink-secondary"
-              key={dish.id}
-            >
-              {dish.name}
-            </span>
-          ))
-        ) : (
-          <span className="rounded-full border border-dashed border-border/80 bg-surface px-3 py-1 text-xs font-semibold text-ink-tertiary">
-            Add dishes later
-          </span>
-        )}
-      </div>
+      <VisitDishGallery
+        allDishes={visit.dishes}
+        featuredDish={featuredDish}
+        hiddenDishCount={hiddenDishCount}
+        supportingDishes={supportingDishes}
+      />
     </article>
   );
 }
@@ -1012,7 +1098,7 @@ function ReadDetails({
         />
       </div>
       <button
-        className="mt-6 flex min-h-[52px] w-full items-center justify-center gap-3 rounded-card border border-success/35 bg-success/5 px-4 text-sm font-semibold text-success transition hover:bg-success/10 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        className="mt-6 flex h-14 w-full items-center justify-center gap-3 rounded-[16px] border border-[rgba(103,163,107,0.45)] bg-[rgba(76,140,83,0.10)] px-4 font-body text-base font-semibold leading-none text-success transition hover:bg-[rgba(76,140,83,0.14)] focus:outline-none focus:ring-4 focus:ring-success/15"
         type="button"
         onClick={onLogVisit}
       >
@@ -1043,14 +1129,6 @@ function VisitHistorySection({
     >
       <div className="flex items-center justify-between gap-4">
         <SectionEyebrow id="visit-history-title">Visit history</SectionEyebrow>
-        {/* <button
-          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 text-sm font-semibold text-success transition hover:bg-success/15 focus:outline-none focus:ring-4 focus:ring-accent-soft"
-          type="button"
-          onClick={onLogVisit}
-        >
-          <PlusCircle aria-hidden="true" size={16} />
-          Revisit
-        </button> */}
       </div>
 
       {visitsView === "loading" ? <VisitsLoadingState /> : null}
@@ -1082,12 +1160,21 @@ function VisitCard({
   isLast: boolean;
   visit: RestaurantVisit;
 }) {
+  const featuredDish = getFeaturedVisitDish(visit);
+  const supportingDishes = visit.dishes
+    .filter((dish) => dish.id !== featuredDish?.id)
+    .slice(0, 2);
+  const hiddenDishCount = Math.max(
+    visit.dishes.length - 1 - supportingDishes.length,
+    0,
+  );
+
   return (
-    <article className="relative grid min-w-0 grid-cols-[28px_minmax(0,1fr)] gap-4 py-4">
+    <article className="relative grid min-w-0 grid-cols-[20px_minmax(0,1fr)] gap-3 py-5 sm:grid-cols-[28px_minmax(0,1fr)] sm:gap-4">
       <div className="relative flex justify-center">
-        <span className="mt-1 h-4 w-4 rounded-full border-2 border-accent bg-bg" />
+        <span className="mt-1 h-3 w-3 rounded-full bg-accent shadow-[0_0_0_3px_rgba(209,154,82,0.14)] sm:h-4 sm:w-4" />
         {!isLast ? (
-          <span className="absolute bottom-0 top-7 w-px bg-accent/40" />
+          <span className="absolute bottom-0 top-7 w-px bg-accent/35" />
         ) : null}
       </div>
       <div className="min-w-0">
@@ -1111,24 +1198,407 @@ function VisitCard({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {visit.dishes.length > 0 ? (
-            visit.dishes.map((dish) => (
-              <span
-                className="rounded-full border border-border/80 bg-surface px-3 py-1 text-xs font-semibold text-ink-secondary"
-                key={dish.id}
-              >
-                {dish.name}
-              </span>
-            ))
-          ) : (
-            <span className="rounded-full border border-dashed border-border/80 bg-surface px-3 py-1 text-xs font-semibold text-ink-tertiary">
-              Add dishes later
-            </span>
-          )}
-        </div>
+        <VisitDishGallery
+          allDishes={visit.dishes}
+          featuredDish={featuredDish}
+          hiddenDishCount={hiddenDishCount}
+          supportingDishes={supportingDishes}
+        />
       </div>
     </article>
+  );
+}
+
+function VisitDishGallery({
+  allDishes,
+  featuredDish,
+  hiddenDishCount,
+  supportingDishes,
+}: {
+  allDishes: RestaurantVisit["dishes"];
+  featuredDish?: RestaurantVisit["dishes"][number];
+  hiddenDishCount: number;
+  supportingDishes: RestaurantVisit["dishes"];
+}) {
+  const [showAllDishes, setShowAllDishes] = useState(false);
+  const [galleryDish, setGalleryDish] = useState<
+    RestaurantVisit["dishes"][number] | null
+  >(null);
+
+  if (!featuredDish) {
+    return (
+      <div className="mt-4 rounded-[16px] border border-dashed border-border/80 bg-surface/55 p-4">
+        <p className="text-sm font-semibold text-ink-primary">
+          No dishes saved
+        </p>
+        <p className="mt-1 text-xs leading-5 text-ink-tertiary">
+          Add dishes when you log visits so this memory has photos and reorder
+          notes.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      <FeaturedDishCard
+        dish={featuredDish}
+        onOpenGallery={() => setGalleryDish(featuredDish)}
+      />
+      {supportingDishes.length > 0 || hiddenDishCount > 0 ? (
+        <div className="mt-3">
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-ink-tertiary">
+            Also had
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-[repeat(3,minmax(0,1fr))]">
+            {supportingDishes.map((dish, index) => (
+              <SupportingDishCard
+                dish={dish}
+                index={index}
+                key={dish.id}
+                onOpenGallery={() => setGalleryDish(dish)}
+              />
+            ))}
+            {hiddenDishCount > 0 ? (
+              <button
+                className="flex min-h-[102px] flex-col items-center justify-center rounded-[14px] border border-border bg-surface/70 px-3 text-center font-body text-ink-primary transition hover:border-accent/40 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+                type="button"
+                onClick={() => setShowAllDishes(true)}
+              >
+                <span className="text-xl font-semibold leading-none">
+                  +{hiddenDishCount}
+                </span>
+                <span className="mt-2 text-xs leading-4 text-ink-tertiary">
+                  more dish{hiddenDishCount > 1 ? "es" : ""}
+                </span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {showAllDishes ? (
+        <AllDishesSheet
+          dishes={allDishes}
+          onClose={() => setShowAllDishes(false)}
+        />
+      ) : null}
+      {galleryDish ? (
+        <DishImageGalleryModal
+          dish={galleryDish}
+          onClose={() => setGalleryDish(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function FeaturedDishCard({
+  dish,
+  onOpenGallery,
+}: {
+  dish: RestaurantVisit["dishes"][number];
+  onOpenGallery: () => void;
+}) {
+  const dishImages = getDishImages(dish);
+
+  return (
+    <button
+      aria-label={`Open ${dish.name} photo gallery`}
+      className="group relative block min-h-[200px] w-full overflow-hidden rounded-[16px] border border-border bg-surface text-left shadow-card transition hover:border-accent/40 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+      type="button"
+      onClick={onOpenGallery}
+    >
+      <img
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
+        src={dishImages[0]}
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(16,15,13,0.05)_0%,rgba(16,15,13,0.25)_48%,rgba(16,15,13,0.9)_100%)]" />
+      <div className="relative flex min-h-[200px] flex-col justify-between p-4">
+        <span className="w-fit rounded-[8px] bg-accent px-3 py-1 font-body text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#0F0D0A]">
+          {dish.wouldEatAgain ? "Favorite" : "Best of visit"}
+        </span>
+        <div>
+          <h4 className="break-words font-display text-[26px] font-bold leading-none tracking-[-0.02em] text-ink-primary">
+            {dish.name}
+          </h4>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-semibold text-ink-secondary">
+            <span className="inline-flex items-center gap-1.5 text-accent">
+              <Star aria-hidden="true" className="fill-current" size={14} />
+              {getDishRatingText(dish.rating)}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <ImagePlus aria-hidden="true" size={14} />
+              {dishImages.length}
+            </span>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function SupportingDishCard({
+  dish,
+  index,
+  onOpenGallery,
+}: {
+  dish: RestaurantVisit["dishes"][number];
+  index: number;
+  onOpenGallery: () => void;
+}) {
+  const dishImages = getDishImages(dish, index + 3);
+
+  return (
+    <button
+      aria-label={`Open ${dish.name} photo gallery`}
+      className="group relative min-h-[102px] overflow-hidden rounded-[14px] border border-border bg-surface text-left transition hover:border-accent/40 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+      type="button"
+      onClick={onOpenGallery}
+    >
+      <img
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
+        src={dishImages[0]}
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(16,15,13,0.08)_0%,rgba(16,15,13,0.78)_100%)]" />
+      <div className="relative flex min-h-[102px] flex-col justify-end p-3">
+        <p className="truncate font-display text-[17px] font-semibold leading-none text-ink-primary">
+          {dish.name}
+        </p>
+        <div className="mt-1.5 flex items-center gap-2 text-[11px] font-semibold text-ink-secondary">
+          <span className="inline-flex items-center gap-1 text-accent">
+            <Star aria-hidden="true" className="fill-current" size={12} />
+            {getDishRatingText(dish.rating)}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <ImagePlus aria-hidden="true" size={12} />
+            {dishImages.length}
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function AllDishesSheet({
+  dishes,
+  onClose,
+}: {
+  dishes: RestaurantVisit["dishes"];
+  onClose: () => void;
+}) {
+  const [galleryDish, setGalleryDish] = useState<
+    RestaurantVisit["dishes"][number] | null
+  >(null);
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-bg/75 p-0 backdrop-blur sm:items-center sm:p-4">
+      <section
+        aria-modal="true"
+        className="max-h-[calc(100svh-16px)] w-full overflow-hidden rounded-t-[28px] border border-b-0 border-border bg-surface shadow-raised sm:max-w-2xl sm:rounded-card sm:border"
+        role="dialog"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-border p-5">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-accent">
+              Visit dishes
+            </p>
+            <h3 className="mt-1 font-display text-2xl font-semibold leading-none text-ink-primary">
+              Everything you had
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-ink-secondary">
+              Full dish list for this visit. Photo galleries can open from each
+              dish once multiple images are saved.
+            </p>
+          </div>
+          <button
+            aria-label="Close dishes"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-bg/80 text-ink-primary transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            type="button"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" size={18} />
+          </button>
+        </div>
+
+        <div className="max-h-[calc(100svh-180px)] space-y-3 overflow-y-auto p-4 pb-[calc(16px+env(safe-area-inset-bottom))] sm:max-h-[62vh] sm:p-5">
+          {dishes.map((dish, index) => {
+            const dishImages = getDishImages(dish, index);
+
+            return (
+              <article
+                className="grid min-w-0 grid-cols-[88px_minmax(0,1fr)] gap-3 rounded-[16px] border border-border bg-bg/55 p-2.5"
+                key={dish.id}
+              >
+                <button
+                  aria-label={`Open ${dish.name} photo gallery`}
+                  className="group relative h-24 overflow-hidden rounded-[12px] bg-surface text-left focus:outline-none focus:ring-4 focus:ring-accent-soft"
+                  type="button"
+                  onClick={() => setGalleryDish(dish)}
+                >
+                  <img
+                    alt=""
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                    src={dishImages[0]}
+                  />
+                  <span className="absolute inset-0 bg-bg/0 transition group-hover:bg-bg/15" />
+                  {dishImages.length > 1 ? (
+                    <span className="absolute bottom-2 right-2 rounded-full border border-border bg-bg/80 px-2 py-0.5 text-[10px] font-semibold text-ink-primary backdrop-blur">
+                      {dishImages.length} photos
+                    </span>
+                  ) : null}
+                </button>
+                <div className="min-w-0 py-1">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="break-words font-display text-xl font-semibold leading-none text-ink-primary">
+                        {dish.name}
+                      </h4>
+                      <p className="mt-2 text-xs font-semibold text-success">
+                        {dish.wouldEatAgain
+                          ? "Would eat again"
+                          : "One-time order"}
+                      </p>
+                    </div>
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-bold text-ink-primary">
+                      <Star
+                        aria-hidden="true"
+                        className="fill-current text-rating-gold"
+                        size={13}
+                      />
+                      {getDishRatingText(dish.rating)}
+                    </span>
+                  </div>
+                  {dish.notes ? (
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-ink-secondary">
+                      {dish.notes}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-ink-tertiary">
+                      No dish notes saved yet.
+                    </p>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+      {galleryDish ? (
+        <DishImageGalleryModal
+          dish={galleryDish}
+          onClose={() => setGalleryDish(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function DishImageGalleryModal({
+  dish,
+  onClose,
+}: {
+  dish: RestaurantVisit["dishes"][number];
+  onClose: () => void;
+}) {
+  const images = getDishImages(dish);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const hasMultipleImages = images.length > 1;
+
+  function showPreviousImage() {
+    setActiveIndex((current) =>
+      current === 0 ? images.length - 1 : current - 1,
+    );
+  }
+
+  function showNextImage() {
+    setActiveIndex((current) =>
+      current === images.length - 1 ? 0 : current + 1,
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-bg/90 p-4 backdrop-blur-md">
+      <section
+        aria-modal="true"
+        className="w-full max-w-3xl overflow-hidden rounded-[24px] border border-border bg-surface shadow-raised"
+        role="dialog"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-border p-4 sm:p-5">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-accent">
+              Dish gallery
+            </p>
+            <h3 className="mt-1 truncate font-display text-2xl font-semibold leading-none text-ink-primary">
+              {dish.name}
+            </h3>
+            <p className="mt-2 text-sm text-ink-secondary">
+              {activeIndex + 1} of {images.length}
+            </p>
+          </div>
+          <button
+            aria-label="Close dish gallery"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-bg/80 text-ink-primary transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            type="button"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" size={18} />
+          </button>
+        </div>
+
+        <div className="relative bg-bg">
+          <img
+            alt=""
+            className="max-h-[68svh] min-h-[320px] w-full object-contain"
+            src={images[activeIndex]}
+          />
+
+          {hasMultipleImages ? (
+            <>
+              <button
+                aria-label="Previous dish image"
+                className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-bg/80 text-ink-primary shadow-card backdrop-blur transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+                type="button"
+                onClick={showPreviousImage}
+              >
+                <ChevronLeft aria-hidden="true" size={20} />
+              </button>
+              <button
+                aria-label="Next dish image"
+                className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-bg/80 text-ink-primary shadow-card backdrop-blur transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+                type="button"
+                onClick={showNextImage}
+              >
+                <ChevronRight aria-hidden="true" size={20} />
+              </button>
+            </>
+          ) : null}
+        </div>
+
+        {hasMultipleImages ? (
+          <div className="flex gap-2 overflow-x-auto border-t border-border p-3">
+            {images.map((imageUrl, index) => (
+              <button
+                aria-label={`Show image ${index + 1}`}
+                className={`h-16 w-16 shrink-0 overflow-hidden rounded-[12px] border transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
+                  activeIndex === index ? "border-accent" : "border-border"
+                }`}
+                key={`${imageUrl}-${index}`}
+                type="button"
+                onClick={() => setActiveIndex(index)}
+              >
+                <img
+                  alt=""
+                  className="h-full w-full object-cover"
+                  src={imageUrl}
+                />
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </section>
+    </div>
   );
 }
 
@@ -1189,11 +1659,11 @@ function VisitsEmptyState({ onLogVisit }: { onLogVisit: () => void }) {
         Start the timeline with your latest visit, rating, spend, and dishes.
       </p>
       <button
-        className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-4 text-sm font-bold text-bg transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        className="mt-5 inline-flex h-[52px] items-center justify-center gap-3 rounded-[16px] bg-accent px-5 font-body text-[15px] font-semibold leading-none text-[#0F0D0A] transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
         type="button"
         onClick={onLogVisit}
       >
-        <PlusCircle aria-hidden="true" size={17} />
+        <PlusCircle aria-hidden="true" size={18} />
         Log first visit
       </button>
     </div>
@@ -1215,11 +1685,11 @@ function VisitsErrorState({ onRetry }: { onRetry: () => void }) {
           </p>
         </div>
         <button
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-error/30 bg-surface px-4 text-sm font-bold text-error"
+          className="inline-flex h-[52px] items-center justify-center gap-3 rounded-[16px] border border-[rgba(227,108,97,0.45)] bg-[rgba(227,108,97,0.10)] px-4 font-body text-[15px] font-medium leading-none text-error"
           type="button"
           onClick={onRetry}
         >
-          <RefreshCw aria-hidden="true" size={16} />
+          <RefreshCw aria-hidden="true" size={18} />
           Retry
         </button>
       </div>
@@ -1272,11 +1742,11 @@ function EditForm({
           </h2>
         </div>
         <button
-          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-border bg-bg px-4 text-sm font-bold text-ink-primary transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft sm:w-auto"
+          className="inline-flex h-[52px] w-full items-center justify-center gap-3 rounded-[16px] border border-border bg-bg px-4 font-body text-[15px] font-medium leading-none text-ink-primary transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft sm:w-auto"
           type="button"
           onClick={onCancel}
         >
-          <X aria-hidden="true" size={17} />
+          <X aria-hidden="true" size={18} />
           Cancel
         </button>
       </div>
@@ -1370,7 +1840,7 @@ function EditForm({
       </div>
 
       <button
-        className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-control bg-accent px-5 py-3 text-base font-bold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-wait disabled:opacity-70"
+        className="mt-5 flex h-[54px] w-full items-center justify-center gap-3 rounded-[16px] bg-accent px-5 font-body text-base font-semibold leading-none text-[#0F0D0A] shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-wait disabled:opacity-70"
         disabled={isMutating}
         type="submit"
       >
@@ -1424,11 +1894,11 @@ function BannerImageField({
         </label>
         {hasSelectedImage ? (
           <button
-            className="inline-flex min-h-9 w-fit items-center justify-center gap-2 rounded-full border border-error/30 bg-error/10 px-3 text-xs font-bold text-error transition hover:border-error focus:outline-none focus:ring-4 focus:ring-error/20"
+            className="inline-flex h-[52px] w-fit items-center justify-center gap-3 rounded-[16px] border border-[rgba(227,108,97,0.45)] bg-[rgba(227,108,97,0.10)] px-4 font-body text-[15px] font-medium leading-none text-error transition hover:bg-[rgba(227,108,97,0.14)] focus:outline-none focus:ring-4 focus:ring-error/20"
             type="button"
             onClick={onClear}
           >
-            <Trash2 aria-hidden="true" size={14} />
+            <Trash2 aria-hidden="true" size={18} />
             Remove selected image
           </button>
         ) : null}
@@ -1533,25 +2003,21 @@ function ActionPanel({
         }
       >
         <button
-          className={`flex min-h-[52px] items-center justify-center gap-3 rounded-control px-4 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-60 ${
-            desktop
-              ? "border border-accent/25 bg-accent text-bg shadow-card hover:bg-accent-hover"
-              : "border border-accent/20 bg-accent-soft/80 text-accent hover:border-accent/35 hover:bg-accent-soft"
-          }`}
+          className="flex h-[54px] items-center justify-center gap-3 rounded-[16px] border border-accent bg-accent px-4 font-body text-[15px] font-semibold leading-none text-[#0F0D0A] shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
           disabled={isEditing || isMutating}
           type="button"
           onClick={onEdit}
         >
-          <Pencil aria-hidden="true" size={17} />
+          <Pencil aria-hidden="true" size={18} />
           Edit restaurant
         </button>
         <button
-          className="flex min-h-[52px] items-center justify-center gap-3 rounded-control border border-error/25 bg-error/5 px-4 text-sm font-semibold text-error transition hover:bg-error/10 focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-[54px] items-center justify-center gap-3 rounded-[16px] border border-[rgba(227,108,97,0.45)] bg-[rgba(227,108,97,0.10)] px-4 font-body text-[15px] font-semibold leading-none text-error transition hover:bg-[rgba(227,108,97,0.14)] focus:outline-none focus:ring-4 focus:ring-error/20 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={isMutating}
           type="button"
           onClick={onDelete}
         >
-          <Trash2 aria-hidden="true" size={17} />
+          <Trash2 aria-hidden="true" size={18} />
           Delete restaurant
         </button>
       </div>
@@ -1621,7 +2087,7 @@ function DeleteDialog({
         </p>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <button
-            className="min-h-12 rounded-control border border-border bg-bg px-4 text-sm font-bold text-ink-primary transition hover:border-accent/50 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            className="h-[54px] rounded-[16px] border border-border bg-bg px-4 font-body text-[15px] font-medium leading-none text-ink-primary transition hover:border-accent/50 focus:outline-none focus:ring-4 focus:ring-accent-soft"
             disabled={isDeleting}
             type="button"
             onClick={onCancel}
@@ -1629,7 +2095,7 @@ function DeleteDialog({
             Keep it
           </button>
           <button
-            className="flex min-h-12 items-center justify-center gap-2 rounded-control bg-error px-4 text-sm font-bold text-bg transition focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-wait disabled:opacity-70"
+            className="flex h-[54px] items-center justify-center gap-3 rounded-[16px] border border-[rgba(227,108,97,0.45)] bg-[rgba(227,108,97,0.10)] px-4 font-body text-[15px] font-semibold leading-none text-error transition hover:bg-[rgba(227,108,97,0.14)] focus:outline-none focus:ring-4 focus:ring-error/20 disabled:cursor-wait disabled:opacity-70"
             disabled={isDeleting}
             type="button"
             onClick={onConfirm}
@@ -1691,8 +2157,11 @@ function LogVisitDialog({
     register: registerDish,
     reset: resetDish,
     setError: setDishError,
+    setValue: setDishValue,
+    watch: watchDish,
   } = useForm<DishDraftFormValues>({
     defaultValues: {
+      images: [],
       name: "",
       notes: "",
       rating: "",
@@ -1701,6 +2170,32 @@ function LogVisitDialog({
   });
 
   const selectedRating = Number(watch("rating") || 0);
+  const selectedDishImages = watchDish("images") ?? [];
+
+  function addDishImages(files: FileList | null) {
+    if (!files?.length) {
+      return;
+    }
+    console.log("files", files, getDishValues("images"), watchDish("images"));
+    console.log("Array files", Array.from(files));
+
+    setDishValue("images", [...selectedDishImages, ...Array.from(files)], {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }
+
+  console.log("getDishValues>>>>>>>>>", getDishValues("images"));
+  function removeDishImage(indexToRemove: number) {
+    setDishValue(
+      "images",
+      selectedDishImages.filter((_, index) => index !== indexToRemove),
+      {
+        shouldDirty: true,
+        shouldValidate: true,
+      },
+    );
+  }
 
   function addDishDraft() {
     const parsed = dishDraftSchema.safeParse(getDishValues());
@@ -1719,8 +2214,11 @@ function LogVisitDialog({
       return;
     }
 
+    parsed.data.id = crypto.randomUUID();
+
     setDishDrafts((current) => [...current, parsed.data]);
     resetDish({
+      images: [],
       name: "",
       notes: "",
       rating: "",
@@ -1733,6 +2231,8 @@ function LogVisitDialog({
     setDialogError("");
 
     const parsed = visitSchema.safeParse(values);
+
+    console.log("parsed", parsed);
 
     if (!parsed.success) {
       parsed.error.issues.forEach((issue) => {
@@ -1905,10 +2405,16 @@ function LogVisitDialog({
                   />
                 </div>
               </div>
+              <DishImagesField
+                error={dishErrors.images?.message}
+                images={selectedDishImages}
+                onAddImages={addDishImages}
+                onRemoveImage={removeDishImage}
+              />
             </div>
 
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <label className="flex min-h-11 w-full items-center justify-center gap-3 rounded-full border border-success/25 bg-success/10 px-4 text-sm font-bold text-success sm:w-auto">
+              <label className="flex h-[52px] w-full items-center justify-center gap-3 rounded-[16px] border border-success/25 bg-success/10 px-4 font-body text-[15px] font-medium leading-none text-success sm:w-auto">
                 <input
                   className="h-4 w-4 accent-current"
                   type="checkbox"
@@ -1917,11 +2423,11 @@ function LogVisitDialog({
                 Would eat again
               </label>
               <button
-                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-4 text-sm font-bold text-accent transition hover:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft sm:w-auto"
+                className="inline-flex h-[52px] w-full items-center justify-center gap-3 rounded-[16px] border border-accent/40 bg-accent-soft px-4 font-body text-[15px] font-semibold leading-none text-accent transition hover:border-accent focus:outline-none focus:ring-4 focus:ring-accent-soft sm:w-auto"
                 type="button"
                 onClick={addDishDraft}
               >
-                <Plus aria-hidden="true" size={17} />
+                <Plus aria-hidden="true" size={18} />
                 Add dish
               </button>
             </div>
@@ -1929,26 +2435,10 @@ function LogVisitDialog({
             {dishDrafts.length > 0 ? (
               <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2">
                 {dishDrafts.map((dish, index) => (
-                  <div
-                    className="min-w-0 rounded-control border border-border bg-surface p-3"
+                  <DishDraftPreviewCard
+                    dish={dish}
                     key={`${dish.name}-${index}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-display text-lg font-semibold text-ink-primary">
-                          {dish.name}
-                        </p>
-                        <p className="mt-1 truncate text-xs font-bold text-success">
-                          {dish.wouldEatAgain
-                            ? "Would eat again"
-                            : "One-time order"}
-                        </p>
-                      </div>
-                      <RatingPill
-                        rating={dish.rating ? Number(dish.rating) : null}
-                      />
-                    </div>
-                  </div>
+                  />
                 ))}
               </div>
             ) : null}
@@ -1956,7 +2446,7 @@ function LogVisitDialog({
 
           <div className="sticky bottom-0 mt-6 grid gap-3 border-t border-border bg-surface pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] sm:static sm:grid-cols-[1fr_1.4fr] sm:border-t-0 sm:pb-0">
             <button
-              className="min-h-12 rounded-control border border-border bg-bg px-4 text-sm font-bold text-ink-primary transition hover:border-accent/50 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+              className="h-[54px] rounded-[16px] border border-border bg-bg px-4 font-body text-[15px] font-medium leading-none text-ink-primary transition hover:border-accent/50 focus:outline-none focus:ring-4 focus:ring-accent-soft"
               disabled={isSaving}
               type="button"
               onClick={onCancel}
@@ -1964,7 +2454,7 @@ function LogVisitDialog({
               Cancel
             </button>
             <button
-              className="flex min-h-12 items-center justify-center gap-2 rounded-control bg-accent px-5 py-3 text-base font-bold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-wait disabled:opacity-70"
+              className="flex h-[54px] items-center justify-center gap-3 rounded-[16px] bg-accent px-5 font-body text-base font-semibold leading-none text-[#0F0D0A] shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft disabled:cursor-wait disabled:opacity-70"
               disabled={isSaving}
               type="submit"
             >
@@ -1987,6 +2477,171 @@ function LogVisitDialog({
           </div>
         </form>
       </section>
+    </div>
+  );
+}
+
+function DishImagesField({
+  error,
+  images,
+  onAddImages,
+  onRemoveImage,
+}: {
+  error?: string;
+  images: File[];
+  onAddImages: (files: FileList | null) => void;
+  onRemoveImage: (index: number) => void;
+}) {
+  const previewUrls = useMemo(
+    () => images.map((image) => URL.createObjectURL(image)),
+    [images],
+  );
+
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [previewUrls]);
+
+  return (
+    <div className="min-w-0 lg:col-span-2">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <label
+            className="text-sm font-bold text-ink-primary"
+            htmlFor="dishImages"
+          >
+            Dish photos
+          </label>
+          <p className="mt-1 text-xs leading-5 text-ink-tertiary">
+            Add multiple angles, bill shots, or plating details.
+          </p>
+        </div>
+        {images.length > 0 ? (
+          <span className="shrink-0 rounded-full border border-accent/25 bg-accent-soft px-3 py-1 text-xs font-semibold text-accent">
+            {images.length} selected
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-2 grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
+        <label
+          className="flex min-h-[118px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[16px] border border-dashed border-accent/35 bg-surface-sunken px-4 text-center transition hover:border-accent/70 focus-within:border-accent focus-within:ring-4 focus-within:ring-accent-soft"
+          htmlFor="dishImages"
+        >
+          <span className="flex h-11 w-11 items-center justify-center rounded-full border border-accent/30 bg-accent-soft text-accent">
+            <ImagePlus aria-hidden="true" size={20} />
+          </span>
+          <span className="font-body text-[15px] font-semibold leading-none text-ink-primary">
+            Add photos
+          </span>
+          <span className="text-xs leading-4 text-ink-tertiary">
+            JPG, PNG, WEBP
+          </span>
+          <input
+            accept={ACCEPTED_IMAGE_TYPES.join(",")}
+            className="sr-only"
+            id="dishImages"
+            multiple
+            type="file"
+            onChange={(event) => {
+              onAddImages(event.target.files);
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
+
+        {images.length > 0 ? (
+          <div className="grid min-w-0 grid-cols-3 gap-2">
+            {images.map((image, index) => (
+              <div
+                className="group relative aspect-square min-w-0 overflow-hidden rounded-[14px] border border-border bg-surface"
+                key={`${image.name}-${image.lastModified}-${index}`}
+              >
+                <img
+                  alt=""
+                  className="h-full w-full object-cover"
+                  src={previewUrls[index]}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-bg/70 via-transparent to-transparent opacity-80" />
+                <button
+                  aria-label={`Remove ${image.name}`}
+                  className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-error/40 bg-bg/80 text-error backdrop-blur transition hover:bg-error/10 focus:outline-none focus:ring-4 focus:ring-error/20"
+                  type="button"
+                  onClick={() => onRemoveImage(index)}
+                >
+                  <X aria-hidden="true" size={16} />
+                </button>
+                <p className="absolute inset-x-2 bottom-2 truncate text-[10px] font-semibold text-ink-primary">
+                  {image.name}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex min-h-[118px] items-center rounded-[16px] border border-border bg-surface/45 px-4">
+            <p className="text-sm leading-6 text-ink-secondary">
+              Photos will appear here before you stage the dish. The first image
+              becomes the visual preview.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {error ? (
+        <p className="mt-2 text-sm font-semibold text-error">{error}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function DishDraftPreviewCard({ dish }: { dish: DishDraftFormValues }) {
+  const previewUrl = useMemo(() => {
+    const firstImage = dish.images[0];
+    return firstImage ? URL.createObjectURL(firstImage) : null;
+  }, [dish.images]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  return (
+    <div className="min-w-0 overflow-hidden rounded-control border border-border bg-surface">
+      {previewUrl ? (
+        <div className="relative h-28">
+          <img
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            src={previewUrl}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-bg/80 to-transparent" />
+          <span className="absolute bottom-2 right-2 rounded-full border border-border bg-bg/80 px-2.5 py-1 text-[11px] font-semibold text-ink-primary backdrop-blur">
+            {dish.images.length} photo{dish.images.length > 1 ? "s" : ""}
+          </span>
+        </div>
+      ) : null}
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate font-display text-lg font-semibold text-ink-primary">
+              {dish.name}
+            </p>
+            <p className="mt-1 truncate text-xs font-bold text-success">
+              {dish.wouldEatAgain ? "Would eat again" : "One-time order"}
+            </p>
+          </div>
+          <RatingPill rating={dish.rating ? Number(dish.rating) : null} />
+        </div>
+        {!previewUrl ? (
+          <p className="mt-3 rounded-[12px] border border-dashed border-border px-3 py-2 text-xs leading-5 text-ink-tertiary">
+            No photos staged for this dish.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -2035,7 +2690,7 @@ function VisitRatingField({
         <div className="mt-3 flex max-w-full flex-wrap gap-2">
           {quickRatings.map((rating) => (
             <button
-              className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
+              className={`min-h-10 shrink-0 rounded-full border px-4 font-body text-[15px] font-semibold leading-none transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
                 selectedRating === rating
                   ? "border-accent/40 bg-accent-soft text-accent"
                   : "border-border bg-bg text-ink-secondary hover:border-accent/40 hover:text-ink-primary"
@@ -2156,7 +2811,7 @@ function RatingField({
         <div className="mt-3 flex max-w-full flex-wrap gap-2">
           {quickRatings.map((rating) => (
             <button
-              className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
+              className={`min-h-10 shrink-0 rounded-full border px-4 font-body text-[15px] font-semibold leading-none transition focus:outline-none focus:ring-4 focus:ring-accent-soft ${
                 selectedRating === rating
                   ? "border-accent/40 bg-accent-soft text-accent"
                   : "border-border bg-bg text-ink-secondary hover:border-accent/40 hover:text-ink-primary"
@@ -2302,7 +2957,9 @@ function HeroRatingMeta({ rating }: { rating?: number | null }) {
         fill={rating === undefined || rating === null ? "none" : "currentColor"}
         size={16}
       />
-      {rating === undefined || rating === null ? "Not rated" : `${rating.toFixed(1)}/10`}
+      {rating === undefined || rating === null
+        ? "Not rated"
+        : `${rating.toFixed(1)}/10`}
     </span>
   );
 }
@@ -2394,7 +3051,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
           </div>
         </div>
         <button
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-error/30 bg-surface px-5 text-sm font-bold text-error shadow-card transition hover:bg-bg focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          className="inline-flex h-[54px] items-center justify-center gap-3 rounded-[16px] border border-[rgba(227,108,97,0.45)] bg-[rgba(227,108,97,0.10)] px-5 font-body text-[15px] font-medium leading-none text-error shadow-card transition hover:bg-[rgba(227,108,97,0.14)] focus:outline-none focus:ring-4 focus:ring-error/20"
           type="button"
           onClick={onRetry}
         >
@@ -2420,7 +3077,7 @@ function NotFoundState() {
           It may have been deleted, or it does not belong to your account.
         </p>
         <Link
-          className="mt-5 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-accent px-5 text-sm font-bold text-bg shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
+          className="mt-5 inline-flex h-[54px] items-center justify-center gap-3 rounded-[16px] bg-accent px-5 font-body text-[15px] font-semibold leading-none text-[#0F0D0A] shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
           href="/restaurants"
         >
           Back to restaurants
