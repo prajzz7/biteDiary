@@ -127,18 +127,45 @@ function getQueryString(value: unknown) {
 const cloudinaryFolderName =
   process.env.NODE_ENV === "production" ? "prod" : "dev";
 
-type ImagesDataType = {
-  fieldname?: string;
-  originalname?: string;
-  encoding?: string;
-  mimetype?: string;
-  path?: string;
-  destination?: string;
-  filename?: string;
-  size?: Number;
+type MulterFile = Express.Multer.File;
+
+type UploadedFiles = MulterFile[] | Record<string, MulterFile[]> | undefined;
+
+type ImagesDataMapType = Record<string, MulterFile[]>;
+
+type DishDraftPayload = {
+  id?: string | null;
+  name?: string | null;
+  notes?: string | null;
+  rating?: number | string | null;
+  wouldEatAgain?: boolean | string | null;
 };
 
-type ImagesDataMapType = Record<string, ImagesDataType[]>;
+function getUploadedFiles(files: UploadedFiles): MulterFile[] {
+  if (!files) {
+    return [];
+  }
+
+  if (Array.isArray(files)) {
+    return files;
+  }
+
+  return Object.values(files).flat() as MulterFile[];
+}
+
+async function cleanupUploadedFiles(files: MulterFile[]) {
+  await Promise.all(
+    files.map(async (file) => {
+      try {
+        await unlink(file.path);
+      } catch (deleteError: any) {
+        if (deleteError.code !== "ENOENT") {
+          console.error("Failed to delete temporary image:", file.path, deleteError);
+        }
+      }
+    }),
+  );
+}
 
 router.post("/", upload.single("bannerImage"), async (req, res) => {
   try {
@@ -645,14 +672,20 @@ router.get("/:restaurantId/visits", async (req, res) => {
 
 router.post("/:restaurantId/visits", upload.any(), async (req, res) => {
   const restaurantId = req.params.restaurantId;
+  const uploadedFiles = getUploadedFiles(req.files);
+
   try {
     if (!req.user) {
+      await cleanupUploadedFiles(uploadedFiles);
+
       return res.status(401).json({
         message: "Unauthorized",
       });
     }
 
     if (!restaurantId) {
+      await cleanupUploadedFiles(uploadedFiles);
+
       return res.status(404).json({
         message: "Restaurant id is needed.",
       });
@@ -670,14 +703,17 @@ router.post("/:restaurantId/visits", upload.any(), async (req, res) => {
       dishList,
     } = req.body;
 
-    const { dishImages } = req?.files;
-
     let imagesDataMap: ImagesDataMapType = {};
 
-    if (req.files) {
-      const seen = new Set();
-      (req?.files || [])?.forEach((imageData) => {
+    if (uploadedFiles.length > 0) {
+      const seen = new Set<string>();
+      uploadedFiles.forEach((imageData) => {
         const id = imageData.fieldname.split("^")?.[1];
+
+        if (!id) {
+          return;
+        }
+
         seen.has(id)
           ? imagesDataMap[id].push(imageData)
           : (imagesDataMap[id] = [imageData]);
@@ -694,12 +730,14 @@ router.post("/:restaurantId/visits", upload.any(), async (req, res) => {
     });
 
     if (!restaurant) {
+      await cleanupUploadedFiles(uploadedFiles);
+
       return res.status(404).json({
         message: "Restaurant not found",
       });
     }
 
-    const createDishImageArray = async (imageList) => {
+    const createDishImageArray = async (imageList: MulterFile[] = []) => {
       const dishImagesCloudinaryUrl = [];
 
       for (const image of imageList) {
@@ -714,17 +752,7 @@ router.post("/:restaurantId/visits", upload.any(), async (req, res) => {
             dishImagePublicUrl: uploadResult.public_id,
           });
         } finally {
-          try {
-            await unlink(image.path);
-          } catch (deleteError: any) {
-            if (deleteError.code !== "ENOENT") {
-              console.error(
-                "Failed to delete temporary image:",
-                image.path,
-                deleteError,
-              );
-            }
-          }
+          await cleanupUploadedFiles([image]);
         }
       }
 
@@ -741,17 +769,21 @@ router.post("/:restaurantId/visits", upload.any(), async (req, res) => {
         userId: req.user.id,
         dishes: {
           create: await Promise.all(
-            JSON.parse(dishList).map(async (dish) => {
+            JSON.parse(dishList).map(async (dish: DishDraftPayload, index: number) => {
+              const dishImageKey = parseOptionalString(dish?.id);
+
               return {
                 name: parseOptionalString(dish?.name),
                 rating: parseOptionalRating(dish?.rating),
                 // price         ,
                 notes: parseOptionalString(dish?.notes),
-                wouldEatAgain: dish?.wouldEatAgain,
+                wouldEatAgain: parseOptionalBoolean(dish?.wouldEatAgain),
 
                 // dishImages: dishImagesData(dish)),
                 dishImages: {
-                  create: await createDishImageArray(imagesDataMap[dish.id]),
+                  create: await createDishImageArray(
+                    dishImageKey ? imagesDataMap[dishImageKey] : [],
+                  ),
                 },
               };
             }),

@@ -569,7 +569,7 @@ function toCreateVisitPayload(
     ),
   );
 
-  dishDrafts.forEach((dish, dishIndex) => {
+  dishDrafts.forEach((dish) => {
     for (const image of dish.images) {
       visitFormData.append(`dishImages^${dish?.id}`, image);
     }
@@ -2176,16 +2176,12 @@ function LogVisitDialog({
     if (!files?.length) {
       return;
     }
-    console.log("files", files, getDishValues("images"), watchDish("images"));
-    console.log("Array files", Array.from(files));
-
     setDishValue("images", [...selectedDishImages, ...Array.from(files)], {
       shouldDirty: true,
       shouldValidate: true,
     });
   }
 
-  console.log("getDishValues>>>>>>>>>", getDishValues("images"));
   function removeDishImage(indexToRemove: number) {
     setDishValue(
       "images",
@@ -2231,8 +2227,6 @@ function LogVisitDialog({
     setDialogError("");
 
     const parsed = visitSchema.safeParse(values);
-
-    console.log("parsed", parsed);
 
     if (!parsed.success) {
       parsed.error.issues.forEach((issue) => {

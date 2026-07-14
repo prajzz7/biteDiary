@@ -32,7 +32,7 @@ export type Restaurant = {
 
 export type Dish = {
   dishImages?: Array<{
-    dishImagePublicId?: string | null;
+    dishImagePublicUrl?: string | null;
     dishImageUrl: string;
     id?: string;
   }>;
