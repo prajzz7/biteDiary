@@ -175,13 +175,6 @@ type VisitsView = "loading" | "ready" | "empty" | "error";
 type MutationStatus = "idle" | "loading" | "success" | "error";
 
 const quickRatings = [10, 9.5, 9, 8.5, 8, 7.5];
-const dishImageUrls = [
-  "https://images.unsplash.com/photo-1617196034796-73dfa7b1fd56?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1562967916-eb82221dfb36?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1553621042-f6e147245754?auto=format&fit=crop&w=900&q=80",
-];
 
 export default function RestaurantDetailPage({
   restaurantId,
@@ -602,27 +595,16 @@ function getFeaturedVisitDish(visit: RestaurantVisit) {
   );
 }
 
-function getDishImageUrl(dishName: string, index = 0) {
-  const charTotal = dishName
-    .split("")
-    .reduce((total, character) => total + character.charCodeAt(0), index);
-
-  return dishImageUrls[charTotal % dishImageUrls.length];
-}
-
 function getDishRatingText(rating?: number | null) {
   return rating === undefined || rating === null ? "Not rated" : `${rating}/10`;
 }
 
-function getDishImages(dish: RestaurantVisit["dishes"][number], index = 0) {
-  const savedImages =
+function getDishImages(dish: RestaurantVisit["dishes"][number]) {
+  return (
     dish.dishImages
       ?.map((image) => image.dishImageUrl)
-      .filter((url): url is string => Boolean(url)) ?? [];
-
-  return savedImages.length > 0
-    ? savedImages
-    : [getDishImageUrl(dish.name, index)];
+      .filter((url): url is string => Boolean(url)) ?? []
+  );
 }
 
 function toDateInputValue(value?: string | null) {
@@ -1254,7 +1236,6 @@ function VisitDishGallery({
             {supportingDishes.map((dish, index) => (
               <SupportingDishCard
                 dish={dish}
-                index={index}
                 key={dish.id}
                 onOpenGallery={() => setGalleryDish(dish)}
               />
@@ -1300,20 +1281,32 @@ function FeaturedDishCard({
   onOpenGallery: () => void;
 }) {
   const dishImages = getDishImages(dish);
+  const hasDishImages = dishImages.length > 0;
 
   return (
     <button
-      aria-label={`Open ${dish.name} photo gallery`}
+      aria-label={
+        hasDishImages
+          ? `Open ${dish.name} photo gallery`
+          : `${dish.name} has no saved photos yet`
+      }
       className="group relative block min-h-[200px] w-full overflow-hidden rounded-[16px] border border-border bg-surface text-left shadow-card transition hover:border-accent/40 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+      disabled={!hasDishImages}
       type="button"
-      onClick={onOpenGallery}
+      onClick={hasDishImages ? onOpenGallery : undefined}
     >
-      <img
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
-        src={dishImages[0]}
-      />
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(16,15,13,0.05)_0%,rgba(16,15,13,0.25)_48%,rgba(16,15,13,0.9)_100%)]" />
+      {hasDishImages ? (
+        <>
+          <img
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            src={dishImages[0]}
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(16,15,13,0.05)_0%,rgba(16,15,13,0.25)_48%,rgba(16,15,13,0.9)_100%)]" />
+        </>
+      ) : (
+        <DishPhotoPlaceholder variant="featured" />
+      )}
       <div className="relative flex min-h-[200px] flex-col justify-between p-4">
         <span className="w-fit rounded-[8px] bg-accent px-3 py-1 font-body text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#0F0D0A]">
           {dish.wouldEatAgain ? "Favorite" : "Best of visit"}
@@ -1329,7 +1322,7 @@ function FeaturedDishCard({
             </span>
             <span className="inline-flex items-center gap-1.5">
               <ImagePlus aria-hidden="true" size={14} />
-              {dishImages.length}
+              {hasDishImages ? dishImages.length : "No photos"}
             </span>
           </div>
         </div>
@@ -1340,28 +1333,38 @@ function FeaturedDishCard({
 
 function SupportingDishCard({
   dish,
-  index,
   onOpenGallery,
 }: {
   dish: RestaurantVisit["dishes"][number];
-  index: number;
   onOpenGallery: () => void;
 }) {
-  const dishImages = getDishImages(dish, index + 3);
+  const dishImages = getDishImages(dish);
+  const hasDishImages = dishImages.length > 0;
 
   return (
     <button
-      aria-label={`Open ${dish.name} photo gallery`}
+      aria-label={
+        hasDishImages
+          ? `Open ${dish.name} photo gallery`
+          : `${dish.name} has no saved photos yet`
+      }
       className="group relative min-h-[102px] overflow-hidden rounded-[14px] border border-border bg-surface text-left transition hover:border-accent/40 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+      disabled={!hasDishImages}
       type="button"
-      onClick={onOpenGallery}
+      onClick={hasDishImages ? onOpenGallery : undefined}
     >
-      <img
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
-        src={dishImages[0]}
-      />
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(16,15,13,0.08)_0%,rgba(16,15,13,0.78)_100%)]" />
+      {hasDishImages ? (
+        <>
+          <img
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            src={dishImages[0]}
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(16,15,13,0.08)_0%,rgba(16,15,13,0.78)_100%)]" />
+        </>
+      ) : (
+        <DishPhotoPlaceholder />
+      )}
       <div className="relative flex min-h-[102px] flex-col justify-end p-3">
         <p className="truncate font-display text-[17px] font-semibold leading-none text-ink-primary">
           {dish.name}
@@ -1373,11 +1376,33 @@ function SupportingDishCard({
           </span>
           <span className="inline-flex items-center gap-1">
             <ImagePlus aria-hidden="true" size={12} />
-            {dishImages.length}
+            {hasDishImages ? dishImages.length : 0}
           </span>
         </div>
       </div>
     </button>
+  );
+}
+
+function DishPhotoPlaceholder({
+  variant = "compact",
+}: {
+  variant?: "compact" | "featured";
+}) {
+  const isFeatured = variant === "featured";
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_28%_22%,rgba(209,154,82,0.22),transparent_34%),linear-gradient(145deg,#241f18,#0f0e0c)]">
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(16,15,13,0.08)_0%,rgba(16,15,13,0.42)_52%,rgba(16,15,13,0.92)_100%)]" />
+      <div
+        className={`relative flex items-center justify-center rounded-full border border-accent/25 bg-bg/45 text-accent/75 backdrop-blur ${
+          isFeatured ? "h-16 w-16" : "h-10 w-10"
+        }`}
+      >
+        <ChefHat aria-hidden="true" size={isFeatured ? 28 : 18} />
+      </div>
+      <span className="sr-only">No dish photo saved</span>
+    </div>
   );
 }
 
@@ -1424,7 +1449,8 @@ function AllDishesSheet({
 
         <div className="max-h-[calc(100svh-180px)] space-y-3 overflow-y-auto p-4 pb-[calc(16px+env(safe-area-inset-bottom))] sm:max-h-[62vh] sm:p-5">
           {dishes.map((dish, index) => {
-            const dishImages = getDishImages(dish, index);
+            const dishImages = getDishImages(dish);
+            const hasDishImages = dishImages.length > 0;
 
             return (
               <article
@@ -1432,17 +1458,28 @@ function AllDishesSheet({
                 key={dish.id}
               >
                 <button
-                  aria-label={`Open ${dish.name} photo gallery`}
+                  aria-label={
+                    hasDishImages
+                      ? `Open ${dish.name} photo gallery`
+                      : `${dish.name} has no saved photos yet`
+                  }
                   className="group relative h-24 overflow-hidden rounded-[12px] bg-surface text-left focus:outline-none focus:ring-4 focus:ring-accent-soft"
+                  disabled={!hasDishImages}
                   type="button"
-                  onClick={() => setGalleryDish(dish)}
+                  onClick={hasDishImages ? () => setGalleryDish(dish) : undefined}
                 >
-                  <img
-                    alt=""
-                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                    src={dishImages[0]}
-                  />
-                  <span className="absolute inset-0 bg-bg/0 transition group-hover:bg-bg/15" />
+                  {hasDishImages ? (
+                    <>
+                      <img
+                        alt=""
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        src={dishImages[0]}
+                      />
+                      <span className="absolute inset-0 bg-bg/0 transition group-hover:bg-bg/15" />
+                    </>
+                  ) : (
+                    <DishPhotoPlaceholder />
+                  )}
                   {dishImages.length > 1 ? (
                     <span className="absolute bottom-2 right-2 rounded-full border border-border bg-bg/80 px-2 py-0.5 text-[10px] font-semibold text-ink-primary backdrop-blur">
                       {dishImages.length} photos
@@ -1505,6 +1542,10 @@ function DishImageGalleryModal({
   const images = getDishImages(dish);
   const [activeIndex, setActiveIndex] = useState(0);
   const hasMultipleImages = images.length > 1;
+
+  if (images.length === 0) {
+    return null;
+  }
 
   function showPreviousImage() {
     setActiveIndex((current) =>
