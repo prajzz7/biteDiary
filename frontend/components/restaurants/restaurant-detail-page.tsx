@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ButtonHTMLAttributes,
+  type ChangeEvent,
+} from "react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { z } from "zod";
 import {
@@ -15,6 +21,7 @@ import {
   CheckCircle2,
   ChefHat,
   ClipboardPenLine,
+  Eye,
   History,
   ImagePlus,
   LoaderCircle,
@@ -173,6 +180,7 @@ type DishDraftFormValues = z.infer<typeof dishDraftSchema>;
 type DetailView = "loading" | "ready" | "error" | "not-found";
 type VisitsView = "loading" | "ready" | "empty" | "error";
 type MutationStatus = "idle" | "loading" | "success" | "error";
+type DishValue = RestaurantVisit["dishes"][number];
 
 const quickRatings = [10, 9.5, 9, 8.5, 8, 7.5];
 
@@ -285,6 +293,109 @@ export default function RestaurantDetailPage({
       setVisitStatus("error");
       throw error;
     }
+  }
+
+  function updateVisitUiOnly(visitId: string, values: VisitFormValues) {
+    setVisits((current) =>
+      current.map((visit) =>
+        visit.id === visitId
+          ? {
+              ...visit,
+              rating: values.rating ? Number(values.rating) : null,
+              totalAmountPaid: values.totalAmountPaid
+                ? Number(values.totalAmountPaid)
+                : null,
+              updatedAt: new Date().toISOString(),
+              visitedAt: values.visitedAt || null,
+              visitNotes: nullableString(values.visitNotes),
+            }
+          : visit,
+      ),
+    );
+    setStatusMessage(
+      "Visit UI updated. Backend integration can be added later.",
+    );
+  }
+
+  function deleteVisitUiOnly(visitId: string) {
+    setVisits((current) => {
+      const nextVisits = current.filter((visit) => visit.id !== visitId);
+      setVisitsView(nextVisits.length > 0 ? "ready" : "empty");
+      return nextVisits;
+    });
+    setStatusMessage("Visit removed from this UI preview.");
+  }
+
+  function toLocalDish(
+    visitId: string,
+    values: DishDraftFormValues,
+    currentDish?: DishValue,
+  ): DishValue {
+    return {
+      dishImages: currentDish?.dishImages ?? [],
+      id: currentDish?.id ?? `ui-dish-${crypto.randomUUID()}`,
+      name: values.name.trim(),
+      notes: nullableString(values.notes),
+      price: currentDish?.price ?? null,
+      rating: values.rating ? Number(values.rating) : null,
+      restaurantVisitId: visitId,
+      wouldEatAgain: values.wouldEatAgain,
+    };
+  }
+
+  function addDishUiOnly(visitId: string, values: DishDraftFormValues) {
+    const dish = toLocalDish(visitId, values);
+
+    setVisits((current) =>
+      current.map((visit) =>
+        visit.id === visitId
+          ? {
+              ...visit,
+              dishes: [...visit.dishes, dish],
+              updatedAt: new Date().toISOString(),
+            }
+          : visit,
+      ),
+    );
+    setStatusMessage("Dish added to this UI preview.");
+  }
+
+  function updateDishUiOnly(
+    visitId: string,
+    dishId: string,
+    values: DishDraftFormValues,
+  ) {
+    setVisits((current) =>
+      current.map((visit) =>
+        visit.id === visitId
+          ? {
+              ...visit,
+              dishes: visit.dishes.map((dish) =>
+                dish.id === dishId ? toLocalDish(visitId, values, dish) : dish,
+              ),
+              updatedAt: new Date().toISOString(),
+            }
+          : visit,
+      ),
+    );
+    setStatusMessage(
+      "Dish UI updated. Backend integration can be added later.",
+    );
+  }
+
+  function deleteDishUiOnly(visitId: string, dishId: string) {
+    setVisits((current) =>
+      current.map((visit) =>
+        visit.id === visitId
+          ? {
+              ...visit,
+              dishes: visit.dishes.filter((dish) => dish.id !== dishId),
+              updatedAt: new Date().toISOString(),
+            }
+          : visit,
+      ),
+    );
+    setStatusMessage("Dish removed from this UI preview.");
   }
 
   async function onSubmit(values: RestaurantFormValues) {
@@ -422,6 +533,11 @@ export default function RestaurantDetailPage({
                     <VisitHistorySection
                       visits={visits}
                       visitsView={visitsView}
+                      onAddDish={addDishUiOnly}
+                      onDeleteDish={deleteDishUiOnly}
+                      onDeleteVisit={deleteVisitUiOnly}
+                      onEditDish={updateDishUiOnly}
+                      onEditVisit={updateVisitUiOnly}
                       onLogVisit={() => setShowVisitDialog(true)}
                       onRetry={loadVisits}
                     />
@@ -443,7 +559,12 @@ export default function RestaurantDetailPage({
                   mutationStatus={mutationStatus}
                   visits={visits}
                   visitsView={visitsView}
+                  onAddDish={addDishUiOnly}
                   onDelete={() => setShowDeleteConfirm(true)}
+                  onDeleteDish={deleteDishUiOnly}
+                  onDeleteVisit={deleteVisitUiOnly}
+                  onEditDish={updateDishUiOnly}
+                  onEditVisit={updateVisitUiOnly}
                   onEdit={() => setIsEditing(true)}
                   onLogVisit={() => setShowVisitDialog(true)}
                   onRetryVisits={loadVisits}
@@ -599,6 +720,18 @@ function getDishRatingText(rating?: number | null) {
   return rating === undefined || rating === null ? "Not rated" : `${rating}/10`;
 }
 
+function getImageValidationError(file: File) {
+  if (file.size > MAX_FILE_SIZE) {
+    return "Each image must be 5MB or smaller";
+  }
+
+  if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+    return "Only .jpg, .png and .webp formats are supported.";
+  }
+
+  return "";
+}
+
 function getDishImages(dish: RestaurantVisit["dishes"][number]) {
   return (
     dish.dishImages
@@ -624,24 +757,21 @@ function HeroCard({ restaurant }: { restaurant: Restaurant }) {
     <header className="relative min-h-[260px] overflow-hidden border-b border-border/80 bg-bg sm:min-h-[300px]">
       <img
         alt="Warm restaurant table"
-        className="absolute inset-0 h-full w-full object-cover opacity-65"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-65"
         src={
           restaurant?.bannerImageUrl
             ? restaurant?.bannerImageUrl
             : "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80"
         }
       />
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(16,15,13,0.52)_0%,rgba(16,15,13,0.16)_38%,rgba(16,15,13,0.86)_100%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(209,154,82,0.18),transparent_36%),linear-gradient(90deg,rgba(16,15,13,0.36),transparent_44%,rgba(16,15,13,0.18))]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(16,15,13,0.52)_0%,rgba(16,15,13,0.16)_38%,rgba(16,15,13,0.86)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(209,154,82,0.18),transparent_36%),linear-gradient(90deg,rgba(16,15,13,0.36),transparent_44%,rgba(16,15,13,0.18))]" />
 
-      <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pt-4 sm:px-6 sm:pt-5">
-        <Link
+      <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-4 pt-4 sm:px-6 sm:pt-5">
+        <BackToRestaurantsButton
           aria-label="Back to restaurants"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-bg/45 text-ink-primary shadow-card backdrop-blur transition hover:border-accent/45 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
-          href="/restaurants"
-        >
-          <ArrowLeft aria-hidden="true" size={20} />
-        </Link>
+          className="relative z-40 inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-bg/45 text-ink-primary shadow-card backdrop-blur transition hover:border-accent/45 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        />
 
         <div className="flex items-center gap-2">
           <button
@@ -677,12 +807,41 @@ function HeroCard({ restaurant }: { restaurant: Restaurant }) {
   );
 }
 
+function BackToRestaurantsButton({
+  children,
+  className,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+  const router = useRouter();
+
+  function goBack() {
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/restaurants");
+  }
+
+  return (
+    <button className={className} type="button" onClick={goBack} {...props}>
+      <ArrowLeft aria-hidden="true" size={children ? 18 : 20} />
+      {children}
+    </button>
+  );
+}
+
 function DesktopRestaurantDetail({
   isEditing,
   isMutating,
+  onAddDish,
   mutationStatus,
   onDelete,
+  onDeleteDish,
+  onDeleteVisit,
+  onEditDish,
   onEdit,
+  onEditVisit,
   onLogVisit,
   onRetryVisits,
   restaurant,
@@ -692,9 +851,18 @@ function DesktopRestaurantDetail({
 }: {
   isEditing: boolean;
   isMutating: boolean;
+  onAddDish: (visitId: string, values: DishDraftFormValues) => void;
   mutationStatus: MutationStatus;
   onDelete: () => void;
+  onDeleteDish: (visitId: string, dishId: string) => void;
+  onDeleteVisit: (visitId: string) => void;
+  onEditDish: (
+    visitId: string,
+    dishId: string,
+    values: DishDraftFormValues,
+  ) => void;
   onEdit: () => void;
+  onEditVisit: (visitId: string, values: VisitFormValues) => void;
   onLogVisit: () => void;
   onRetryVisits: () => void;
   restaurant: Restaurant;
@@ -715,6 +883,11 @@ function DesktopRestaurantDetail({
         <DesktopVisitPanel
           visits={visits}
           visitsView={visitsView}
+          onAddDish={onAddDish}
+          onDeleteDish={onDeleteDish}
+          onDeleteVisit={onDeleteVisit}
+          onEditDish={onEditDish}
+          onEditVisit={onEditVisit}
           onLogVisit={onLogVisit}
           onRetry={onRetryVisits}
         />
@@ -738,13 +911,9 @@ function DesktopRestaurantDetail({
 function DesktopTopBar() {
   return (
     <div className="mb-6 flex items-center justify-between gap-4">
-      <Link
-        className="inline-flex min-h-11 items-center gap-3 rounded-full px-2 text-sm font-semibold text-ink-secondary transition hover:text-ink-primary focus:outline-none focus:ring-4 focus:ring-accent-soft"
-        href="/restaurants"
-      >
-        <ArrowLeft aria-hidden="true" size={18} />
+      <BackToRestaurantsButton className="inline-flex min-h-11 items-center gap-3 rounded-full px-2 text-sm font-semibold text-ink-secondary transition hover:text-ink-primary focus:outline-none focus:ring-4 focus:ring-accent-soft">
         Back to restaurants
-      </Link>
+      </BackToRestaurantsButton>
 
       <div className="flex items-center gap-2">
         <button
@@ -882,11 +1051,25 @@ function DesktopInfoItem({
 }
 
 function DesktopVisitPanel({
+  onAddDish,
+  onDeleteDish,
+  onDeleteVisit,
+  onEditDish,
+  onEditVisit,
   onLogVisit,
   onRetry,
   visits,
   visitsView,
 }: {
+  onAddDish: (visitId: string, values: DishDraftFormValues) => void;
+  onDeleteDish: (visitId: string, dishId: string) => void;
+  onDeleteVisit: (visitId: string) => void;
+  onEditDish: (
+    visitId: string,
+    dishId: string,
+    values: DishDraftFormValues,
+  ) => void;
+  onEditVisit: (visitId: string, values: VisitFormValues) => void;
   onLogVisit: () => void;
   onRetry: () => void;
   visits: RestaurantVisit[];
@@ -930,6 +1113,11 @@ function DesktopVisitPanel({
             <DesktopVisitCard
               index={visits.length - index}
               key={visit.id}
+              onAddDish={onAddDish}
+              onDeleteDish={onDeleteDish}
+              onDeleteVisit={onDeleteVisit}
+              onEditDish={onEditDish}
+              onEditVisit={onEditVisit}
               visit={visit}
             />
           ))}
@@ -943,9 +1131,23 @@ function DesktopVisitPanel({
 
 function DesktopVisitCard({
   index,
+  onAddDish,
+  onDeleteDish,
+  onDeleteVisit,
+  onEditDish,
+  onEditVisit,
   visit,
 }: {
   index: number;
+  onAddDish: (visitId: string, values: DishDraftFormValues) => void;
+  onDeleteDish: (visitId: string, dishId: string) => void;
+  onDeleteVisit: (visitId: string) => void;
+  onEditDish: (
+    visitId: string,
+    dishId: string,
+    values: DishDraftFormValues,
+  ) => void;
+  onEditVisit: (visitId: string, values: VisitFormValues) => void;
   visit: RestaurantVisit;
 }) {
   const featuredDish = getFeaturedVisitDish(visit);
@@ -973,10 +1175,12 @@ function DesktopVisitCard({
             {visit.visitNotes || "No notes saved for this visit yet."}
           </p>
         </div>
-        <MoreVertical
-          aria-hidden="true"
-          className="shrink-0 text-ink-tertiary"
-          size={17}
+        <VisitActionButtons
+          compact
+          visit={visit}
+          onAddDish={onAddDish}
+          onDeleteVisit={onDeleteVisit}
+          onEditVisit={onEditVisit}
         />
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -992,6 +1196,10 @@ function DesktopVisitCard({
         allDishes={visit.dishes}
         featuredDish={featuredDish}
         hiddenDishCount={hiddenDishCount}
+        visitId={visit.id}
+        onAddDish={onAddDish}
+        onDeleteDish={onDeleteDish}
+        onEditDish={onEditDish}
         supportingDishes={supportingDishes}
       />
     </article>
@@ -1092,11 +1300,25 @@ function ReadDetails({
 }
 
 function VisitHistorySection({
+  onAddDish,
+  onDeleteDish,
+  onDeleteVisit,
+  onEditDish,
+  onEditVisit,
   onLogVisit,
   onRetry,
   visits,
   visitsView,
 }: {
+  onAddDish: (visitId: string, values: DishDraftFormValues) => void;
+  onDeleteDish: (visitId: string, dishId: string) => void;
+  onDeleteVisit: (visitId: string) => void;
+  onEditDish: (
+    visitId: string,
+    dishId: string,
+    values: DishDraftFormValues,
+  ) => void;
+  onEditVisit: (visitId: string, values: VisitFormValues) => void;
   onLogVisit: () => void;
   onRetry: () => void;
   visits: RestaurantVisit[];
@@ -1124,6 +1346,11 @@ function VisitHistorySection({
             <VisitCard
               isLast={index === visits.length - 1}
               key={visit.id}
+              onAddDish={onAddDish}
+              onDeleteDish={onDeleteDish}
+              onDeleteVisit={onDeleteVisit}
+              onEditDish={onEditDish}
+              onEditVisit={onEditVisit}
               visit={visit}
             />
           ))}
@@ -1137,9 +1364,23 @@ function VisitHistorySection({
 
 function VisitCard({
   isLast,
+  onAddDish,
+  onDeleteDish,
+  onDeleteVisit,
+  onEditDish,
+  onEditVisit,
   visit,
 }: {
   isLast: boolean;
+  onAddDish: (visitId: string, values: DishDraftFormValues) => void;
+  onDeleteDish: (visitId: string, dishId: string) => void;
+  onDeleteVisit: (visitId: string) => void;
+  onEditDish: (
+    visitId: string,
+    dishId: string,
+    values: DishDraftFormValues,
+  ) => void;
+  onEditVisit: (visitId: string, values: VisitFormValues) => void;
   visit: RestaurantVisit;
 }) {
   const featuredDish = getFeaturedVisitDish(visit);
@@ -1155,9 +1396,8 @@ function VisitCard({
     <article className="relative grid min-w-0 grid-cols-[20px_minmax(0,1fr)] gap-3 py-5 sm:grid-cols-[28px_minmax(0,1fr)] sm:gap-4">
       <div className="relative flex justify-center">
         <span className="mt-1 h-3 w-3 rounded-full bg-accent shadow-[0_0_0_3px_rgba(209,154,82,0.14)] sm:h-4 sm:w-4" />
-        {!isLast ? (
-          <span className="absolute bottom-0 top-7 w-px bg-accent/35" />
-        ) : null}
+
+        <span className="absolute bottom-0 top-7 w-px bg-accent/35" />
       </div>
       <div className="min-w-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1179,11 +1419,21 @@ function VisitCard({
             ) : null}
           </div>
         </div>
+        <VisitActionButtons
+          visit={visit}
+          onAddDish={onAddDish}
+          onDeleteVisit={onDeleteVisit}
+          onEditVisit={onEditVisit}
+        />
 
         <VisitDishGallery
           allDishes={visit.dishes}
           featuredDish={featuredDish}
           hiddenDishCount={hiddenDishCount}
+          visitId={visit.id}
+          onAddDish={onAddDish}
+          onDeleteDish={onDeleteDish}
+          onEditDish={onEditDish}
           supportingDishes={supportingDishes}
         />
       </div>
@@ -1191,21 +1441,546 @@ function VisitCard({
   );
 }
 
+function VisitActionButtons({
+  compact = false,
+  onAddDish,
+  onDeleteVisit,
+  onEditVisit,
+  visit,
+}: {
+  compact?: boolean;
+  onAddDish: (visitId: string, values: DishDraftFormValues) => void;
+  onDeleteVisit: (visitId: string) => void;
+  onEditVisit: (visitId: string, values: VisitFormValues) => void;
+  visit: RestaurantVisit;
+}) {
+  const [activeDialog, setActiveDialog] = useState<
+    "add-dish" | "delete-visit" | "edit-visit" | null
+  >(null);
+
+  return (
+    <div
+      className={`mt-4 flex flex-wrap gap-2 ${
+        compact ? "mt-0 justify-end" : ""
+      }`}
+    >
+      <button
+        className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-success/25 bg-success/10 px-3 font-body text-xs font-semibold text-success transition hover:border-success/45 focus:outline-none focus:ring-4 focus:ring-success/15"
+        type="button"
+        onClick={() => setActiveDialog("add-dish")}
+      >
+        <Plus aria-hidden="true" size={14} />
+        Add dish
+      </button>
+      <Link
+        className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-border bg-bg/70 px-3 font-body text-xs font-semibold text-ink-secondary transition hover:border-accent/45 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        href={`/visits/${visit.id}`}
+      >
+        <Eye aria-hidden="true" size={14} />
+        View
+      </Link>
+      <button
+        className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-accent/30 bg-accent-soft px-3 font-body text-xs font-semibold text-accent transition hover:border-accent/60 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        type="button"
+        onClick={() => setActiveDialog("edit-visit")}
+      >
+        <Pencil aria-hidden="true" size={14} />
+        Edit
+      </button>
+      <button
+        className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-error/30 bg-error/10 px-3 font-body text-xs font-semibold text-error transition hover:border-error/55 focus:outline-none focus:ring-4 focus:ring-error/20"
+        type="button"
+        onClick={() => setActiveDialog("delete-visit")}
+      >
+        <Trash2 aria-hidden="true" size={14} />
+        Delete
+      </button>
+
+      {activeDialog === "edit-visit" ? (
+        <VisitEditorDialog
+          visit={visit}
+          onCancel={() => setActiveDialog(null)}
+          onSave={(values) => {
+            onEditVisit(visit.id, values);
+            setActiveDialog(null);
+          }}
+        />
+      ) : null}
+      {activeDialog === "add-dish" ? (
+        <DishEditorDialog
+          mode="add"
+          dish={createEmptyDishDraft(visit.id)}
+          onCancel={() => setActiveDialog(null)}
+          onSave={(values) => {
+            onAddDish(visit.id, values);
+            setActiveDialog(null);
+          }}
+        />
+      ) : null}
+      {activeDialog === "delete-visit" ? (
+        <UiDeleteDialog
+          title="Delete visit?"
+          description={`Remove the ${formatDate(
+            visit.visitedAt ?? visit.createdAt,
+          )} visit from this UI preview.`}
+          confirmLabel="Delete visit"
+          onCancel={() => setActiveDialog(null)}
+          onConfirm={() => {
+            onDeleteVisit(visit.id);
+            setActiveDialog(null);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function createEmptyDishDraft(visitId: string): DishValue {
+  return {
+    dishImages: [],
+    id: `ui-empty-dish-${crypto.randomUUID()}`,
+    name: "",
+    notes: "",
+    price: null,
+    rating: null,
+    restaurantVisitId: visitId,
+    wouldEatAgain: true,
+  };
+}
+
+function toDishDraftFormValues(dish: DishValue): DishDraftFormValues {
+  return {
+    id: dish.id,
+    images: [],
+    name: dish.name,
+    notes: dish.notes ?? "",
+    rating:
+      dish.rating !== undefined && dish.rating !== null
+        ? String(dish.rating)
+        : "",
+    wouldEatAgain: dish.wouldEatAgain,
+  };
+}
+
+function VisitEditorDialog({
+  onCancel,
+  onSave,
+  visit,
+}: {
+  onCancel: () => void;
+  onSave: (values: VisitFormValues) => void;
+  visit: RestaurantVisit;
+}) {
+  const {
+    formState: { errors },
+    handleSubmit,
+    register,
+    setError,
+    setValue,
+    watch,
+  } = useForm<VisitFormValues>({
+    defaultValues: {
+      rating:
+        visit.rating !== undefined && visit.rating !== null
+          ? String(visit.rating)
+          : "",
+      totalAmountPaid:
+        visit.totalAmountPaid !== undefined && visit.totalAmountPaid !== null
+          ? String(visit.totalAmountPaid)
+          : "",
+      visitedAt: toDateInputValue(visit.visitedAt ?? visit.createdAt),
+      visitNotes: visit.visitNotes ?? "",
+    },
+  });
+
+  const selectedRating = Number(watch("rating") || 0);
+
+  function submit(values: VisitFormValues) {
+    const parsed = visitSchema.safeParse(values);
+
+    if (!parsed.success) {
+      parsed.error.issues.forEach((issue) => {
+        const field = issue.path[0];
+
+        if (typeof field === "string") {
+          setError(field as keyof VisitFormValues, {
+            message: issue.message,
+            type: "manual",
+          });
+        }
+      });
+      return;
+    }
+
+    onSave(parsed.data);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center overflow-x-hidden bg-bg/75 p-0 backdrop-blur sm:items-center sm:p-4">
+      <section
+        aria-modal="true"
+        className="max-h-[calc(100svh-12px)] w-full max-w-full overflow-y-auto rounded-t-[28px] border border-b-0 border-border bg-surface shadow-raised sm:max-w-2xl sm:rounded-card sm:border"
+        role="dialog"
+      >
+        <DialogHeader eyebrow="Visit" title="Edit visit" onClose={onCancel} />
+        <form
+          className="space-y-5 p-4 sm:p-6"
+          noValidate
+          onSubmit={handleSubmit(submit)}
+        >
+          <VisitRatingField
+            error={errors.rating?.message}
+            label="Dish rating"
+            register={register("rating")}
+            selectedRating={selectedRating}
+            setValue={setValue}
+          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <VisitField
+              error={errors.visitedAt?.message}
+              icon={CalendarDays}
+              id="edit-visitedAt"
+              label="Visited date"
+              register={register("visitedAt")}
+              type="date"
+            />
+            <VisitField
+              error={errors.totalAmountPaid?.message}
+              icon={ReceiptText}
+              id="edit-totalAmountPaid"
+              label="Total spend"
+              placeholder="3200"
+              register={register("totalAmountPaid")}
+              type="number"
+            />
+          </div>
+          <div>
+            <label
+              className="text-sm font-bold text-ink-primary"
+              htmlFor="edit-visitNotes"
+            >
+              Visit notes
+            </label>
+            <div className="mt-2 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+              <textarea
+                className="min-h-[118px] w-full resize-y border-0 bg-transparent py-3 text-base leading-6 text-ink-primary outline-none placeholder:text-ink-tertiary"
+                id="edit-visitNotes"
+                placeholder="What should future you remember?"
+                {...register("visitNotes")}
+              />
+            </div>
+          </div>
+          <DialogFooter confirmLabel="Save visit" onCancel={onCancel} />
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function DishEditorDialog({
+  dish,
+  mode,
+  onCancel,
+  onSave,
+}: {
+  dish: DishValue;
+  mode: "add" | "edit";
+  onCancel: () => void;
+  onSave: (values: DishDraftFormValues) => void;
+}) {
+  const {
+    clearErrors,
+    formState: { errors },
+    getValues,
+    handleSubmit,
+    register,
+    setError,
+    setValue,
+    watch,
+  } = useForm<DishDraftFormValues>({
+    defaultValues: toDishDraftFormValues(dish),
+  });
+  const selectedRating = Number(watch("rating") || 0);
+  const selectedImages = watch("images") ?? [];
+
+  function addImages(files: FileList | null) {
+    if (!files?.length) {
+      return;
+    }
+
+    const incomingFiles = Array.from(files);
+    const invalidFile = incomingFiles.find((file) =>
+      getImageValidationError(file),
+    );
+
+    if (invalidFile) {
+      setError("images", {
+        message: getImageValidationError(invalidFile),
+        type: "manual",
+      });
+      return;
+    }
+
+    clearErrors("images");
+    setValue("images", [...selectedImages, ...incomingFiles], {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }
+
+  function removeImage(indexToRemove: number) {
+    setValue(
+      "images",
+      selectedImages.filter((_, index) => index !== indexToRemove),
+      {
+        shouldDirty: true,
+        shouldValidate: true,
+      },
+    );
+    clearErrors("images");
+  }
+
+  function submit() {
+    const parsed = dishDraftSchema.safeParse(getValues());
+
+    if (!parsed.success) {
+      parsed.error.issues.forEach((issue) => {
+        const field = issue.path[0];
+
+        if (typeof field === "string") {
+          setError(field as keyof DishDraftFormValues, {
+            message: issue.message,
+            type: "manual",
+          });
+        }
+      });
+      return;
+    }
+
+    onSave(parsed.data);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[85] flex items-end justify-center overflow-x-hidden bg-bg/75 p-0 backdrop-blur sm:items-center sm:p-4">
+      <section
+        aria-modal="true"
+        className="max-h-[calc(100svh-12px)] w-full max-w-full overflow-y-auto rounded-t-[28px] border border-b-0 border-border bg-surface shadow-raised sm:max-w-2xl sm:rounded-card sm:border"
+        role="dialog"
+      >
+        <DialogHeader
+          eyebrow="Dish"
+          title={mode === "add" ? "Add dish" : "Edit dish"}
+          onClose={onCancel}
+        />
+        <form
+          className="space-y-5 p-4 sm:p-6"
+          noValidate
+          onSubmit={handleSubmit(submit)}
+        >
+          <VisitField
+            error={errors.name?.message}
+            icon={Utensils}
+            id="dish-editor-name"
+            label="Dish name"
+            placeholder="Butter Garlic Prawns"
+            register={register("name")}
+          />
+          <VisitRatingField
+            error={errors.rating?.message}
+            register={register("rating")}
+            selectedRating={selectedRating}
+            setValue={setValue}
+          />
+          <div>
+            <label
+              className="text-sm font-bold text-ink-primary"
+              htmlFor="dish-editor-notes"
+            >
+              Dish notes
+            </label>
+            <div className="mt-2 rounded-control border border-border bg-surface-sunken px-4 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
+              <textarea
+                className="min-h-[96px] w-full resize-y border-0 bg-transparent py-3 text-base leading-6 text-ink-primary outline-none placeholder:text-ink-tertiary"
+                id="dish-editor-notes"
+                placeholder="Would reorder, spicy, share next time..."
+                {...register("notes")}
+              />
+            </div>
+          </div>
+          <DishImagesField
+            error={errors.images?.message}
+            images={selectedImages}
+            onAddImages={addImages}
+            onRemoveImage={removeImage}
+          />
+          {mode === "edit" && dish.dishImages && dish.dishImages.length > 0 ? (
+            <p className="rounded-[14px] border border-border bg-bg/55 px-4 py-3 text-xs leading-5 text-ink-tertiary">
+              Existing saved photos stay attached in this UI preview. Newly
+              selected files are staged for the future backend flow.
+            </p>
+          ) : null}
+          <label className="flex min-h-12 items-center justify-between gap-3 rounded-control border border-border bg-bg px-4 py-3">
+            <span>
+              <span className="block text-sm font-bold text-ink-primary">
+                Would eat again
+              </span>
+              <span className="block text-xs leading-5 text-ink-tertiary">
+                Mark this as reorder-worthy.
+              </span>
+            </span>
+            <input
+              className="h-5 w-5 accent-current"
+              type="checkbox"
+              {...register("wouldEatAgain")}
+            />
+          </label>
+          <DialogFooter
+            confirmLabel={mode === "add" ? "Add dish" : "Save dish"}
+            onCancel={onCancel}
+          />
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function DialogHeader({
+  eyebrow,
+  onClose,
+  title,
+}: {
+  eyebrow: string;
+  onClose: () => void;
+  title: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-border p-4 sm:p-6">
+      <div className="min-w-0">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-accent">
+          {eyebrow}
+        </p>
+        <h3 className="mt-1 break-words font-display text-2xl font-semibold leading-none text-ink-primary">
+          {title}
+        </h3>
+      </div>
+      <button
+        aria-label="Close dialog"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-bg/80 text-ink-primary transition hover:border-accent/50 hover:text-accent focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        type="button"
+        onClick={onClose}
+      >
+        <X aria-hidden="true" size={18} />
+      </button>
+    </div>
+  );
+}
+
+function DialogFooter({
+  confirmLabel,
+  onCancel,
+}: {
+  confirmLabel: string;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="sticky bottom-0 grid gap-3 border-t border-border bg-surface pt-4 pb-[calc(16px+env(safe-area-inset-bottom))] sm:static sm:grid-cols-[1fr_1.4fr] sm:border-t-0 sm:pb-0">
+      <button
+        className="h-[54px] rounded-[16px] border border-border bg-bg px-4 font-body text-[15px] font-medium leading-none text-ink-primary transition hover:border-accent/50 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        type="button"
+        onClick={onCancel}
+      >
+        Cancel
+      </button>
+      <button
+        className="flex h-[54px] items-center justify-center gap-3 rounded-[16px] bg-accent px-5 font-body text-base font-semibold leading-none text-[#0F0D0A] shadow-card transition hover:bg-accent-hover focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        type="submit"
+      >
+        <Save aria-hidden="true" size={18} />
+        {confirmLabel}
+      </button>
+    </div>
+  );
+}
+
+function UiDeleteDialog({
+  confirmLabel,
+  description,
+  onCancel,
+  onConfirm,
+  title,
+}: {
+  confirmLabel: string;
+  description: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  title: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-bg/75 p-0 backdrop-blur sm:items-center sm:p-4">
+      <section
+        aria-modal="true"
+        className="w-full max-w-md rounded-t-[28px] border border-b-0 border-error/30 bg-surface p-5 pb-[calc(20px+env(safe-area-inset-bottom))] shadow-raised sm:rounded-card sm:border"
+        role="dialog"
+      >
+        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-error/30 bg-error/10 text-error">
+          <Trash2 aria-hidden="true" size={22} />
+        </div>
+        <h3 className="mt-4 font-display text-2xl font-semibold text-ink-primary">
+          {title}
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-ink-secondary">
+          {description}
+        </p>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <button
+            className="h-[52px] rounded-[16px] border border-border bg-bg px-4 font-body text-[15px] font-medium leading-none text-ink-primary transition hover:border-accent/50 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+            type="button"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            className="h-[52px] rounded-[16px] border border-error/45 bg-error/10 px-4 font-body text-[15px] font-semibold leading-none text-error transition hover:bg-error/15 focus:outline-none focus:ring-4 focus:ring-error/20"
+            type="button"
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function VisitDishGallery({
   allDishes,
   featuredDish,
   hiddenDishCount,
+  onAddDish,
+  onDeleteDish,
+  onEditDish,
   supportingDishes,
+  visitId,
 }: {
   allDishes: RestaurantVisit["dishes"];
   featuredDish?: RestaurantVisit["dishes"][number];
   hiddenDishCount: number;
+  onAddDish: (visitId: string, values: DishDraftFormValues) => void;
+  onDeleteDish: (visitId: string, dishId: string) => void;
+  onEditDish: (
+    visitId: string,
+    dishId: string,
+    values: DishDraftFormValues,
+  ) => void;
   supportingDishes: RestaurantVisit["dishes"];
+  visitId: string;
 }) {
   const [showAllDishes, setShowAllDishes] = useState(false);
   const [galleryDish, setGalleryDish] = useState<
     RestaurantVisit["dishes"][number] | null
   >(null);
+  const [editingDish, setEditingDish] = useState<DishValue | null>(null);
+  const [deletingDish, setDeletingDish] = useState<DishValue | null>(null);
 
   if (!featuredDish) {
     return (
@@ -1217,6 +1992,25 @@ function VisitDishGallery({
           Add dishes when you log visits so this memory has photos and reorder
           notes.
         </p>
+        <button
+          className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-accent/35 bg-accent-soft px-3 font-body text-sm font-semibold text-accent"
+          type="button"
+          onClick={() => setEditingDish(createEmptyDishDraft(visitId))}
+        >
+          <Plus aria-hidden="true" size={16} />
+          Add dish
+        </button>
+        {editingDish ? (
+          <DishEditorDialog
+            mode="add"
+            dish={editingDish}
+            onCancel={() => setEditingDish(null)}
+            onSave={(values) => {
+              onAddDish(visitId, values);
+              setEditingDish(null);
+            }}
+          />
+        ) : null}
       </div>
     );
   }
@@ -1225,6 +2019,8 @@ function VisitDishGallery({
     <div className="mt-4">
       <FeaturedDishCard
         dish={featuredDish}
+        onDelete={() => setDeletingDish(featuredDish)}
+        onEdit={() => setEditingDish(featuredDish)}
         onOpenGallery={() => setGalleryDish(featuredDish)}
       />
       {supportingDishes.length > 0 || hiddenDishCount > 0 ? (
@@ -1237,6 +2033,8 @@ function VisitDishGallery({
               <SupportingDishCard
                 dish={dish}
                 key={dish.id}
+                onDelete={() => setDeletingDish(dish)}
+                onEdit={() => setEditingDish(dish)}
                 onOpenGallery={() => setGalleryDish(dish)}
               />
             ))}
@@ -1260,7 +2058,10 @@ function VisitDishGallery({
       {showAllDishes ? (
         <AllDishesSheet
           dishes={allDishes}
+          visitId={visitId}
           onClose={() => setShowAllDishes(false)}
+          onDeleteDish={onDeleteDish}
+          onEditDish={onEditDish}
         />
       ) : null}
       {galleryDish ? (
@@ -1269,32 +2070,64 @@ function VisitDishGallery({
           onClose={() => setGalleryDish(null)}
         />
       ) : null}
+      {editingDish ? (
+        <DishEditorDialog
+          mode={editingDish.id.startsWith("ui-empty-dish") ? "add" : "edit"}
+          dish={editingDish}
+          onCancel={() => setEditingDish(null)}
+          onSave={(values) => {
+            if (editingDish.id.startsWith("ui-empty-dish")) {
+              onAddDish(visitId, values);
+            } else {
+              onEditDish(visitId, editingDish.id, values);
+            }
+            setEditingDish(null);
+          }}
+        />
+      ) : null}
+      {deletingDish ? (
+        <UiDeleteDialog
+          title="Delete dish?"
+          description={`Remove ${deletingDish.name} from this visit preview.`}
+          confirmLabel="Delete dish"
+          onCancel={() => setDeletingDish(null)}
+          onConfirm={() => {
+            onDeleteDish(visitId, deletingDish.id);
+            setDeletingDish(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
 function FeaturedDishCard({
   dish,
+  onDelete,
+  onEdit,
   onOpenGallery,
 }: {
   dish: RestaurantVisit["dishes"][number];
+  onDelete: () => void;
+  onEdit: () => void;
   onOpenGallery: () => void;
 }) {
   const dishImages = getDishImages(dish);
   const hasDishImages = dishImages.length > 0;
 
   return (
-    <button
-      aria-label={
-        hasDishImages
-          ? `Open ${dish.name} photo gallery`
-          : `${dish.name} has no saved photos yet`
-      }
-      className="group relative block min-h-[200px] w-full overflow-hidden rounded-[16px] border border-border bg-surface text-left shadow-card transition hover:border-accent/40 focus:outline-none focus:ring-4 focus:ring-accent-soft"
-      disabled={!hasDishImages}
-      type="button"
-      onClick={hasDishImages ? onOpenGallery : undefined}
-    >
+    <article className="group relative block min-h-[200px] w-full overflow-hidden rounded-[16px] border border-border bg-surface text-left shadow-card transition hover:border-accent/40">
+      <button
+        aria-label={
+          hasDishImages
+            ? `Open ${dish.name} photo gallery`
+            : `${dish.name} has no saved photos yet`
+        }
+        className="absolute inset-0 z-10 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        disabled={!hasDishImages}
+        type="button"
+        onClick={hasDishImages ? onOpenGallery : undefined}
+      />
       {hasDishImages ? (
         <>
           <img
@@ -1307,10 +2140,15 @@ function FeaturedDishCard({
       ) : (
         <DishPhotoPlaceholder variant="featured" />
       )}
-      <div className="relative flex min-h-[200px] flex-col justify-between p-4">
-        <span className="w-fit rounded-[8px] bg-accent px-3 py-1 font-body text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#0F0D0A]">
-          {dish.wouldEatAgain ? "Favorite" : "Best of visit"}
-        </span>
+      <div className="pointer-events-none relative z-20 flex min-h-[200px] flex-col justify-between p-4">
+        <div className="flex items-start justify-between gap-3">
+          <span className="w-fit rounded-[8px] bg-accent px-3 py-1 font-body text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#0F0D0A]">
+            {dish.wouldEatAgain ? "Favorite" : "Best of visit"}
+          </span>
+          <div className="pointer-events-auto">
+            <DishCardActions onDelete={onDelete} onEdit={onEdit} />
+          </div>
+        </div>
         <div>
           <h4 className="break-words font-display text-[26px] font-bold leading-none tracking-[-0.02em] text-ink-primary">
             {dish.name}
@@ -1327,32 +2165,37 @@ function FeaturedDishCard({
           </div>
         </div>
       </div>
-    </button>
+    </article>
   );
 }
 
 function SupportingDishCard({
   dish,
+  onDelete,
+  onEdit,
   onOpenGallery,
 }: {
   dish: RestaurantVisit["dishes"][number];
+  onDelete: () => void;
+  onEdit: () => void;
   onOpenGallery: () => void;
 }) {
   const dishImages = getDishImages(dish);
   const hasDishImages = dishImages.length > 0;
 
   return (
-    <button
-      aria-label={
-        hasDishImages
-          ? `Open ${dish.name} photo gallery`
-          : `${dish.name} has no saved photos yet`
-      }
-      className="group relative min-h-[102px] overflow-hidden rounded-[14px] border border-border bg-surface text-left transition hover:border-accent/40 focus:outline-none focus:ring-4 focus:ring-accent-soft"
-      disabled={!hasDishImages}
-      type="button"
-      onClick={hasDishImages ? onOpenGallery : undefined}
-    >
+    <article className="group relative min-h-[102px] overflow-hidden rounded-[14px] border border-border bg-surface text-left transition hover:border-accent/40">
+      <button
+        aria-label={
+          hasDishImages
+            ? `Open ${dish.name} photo gallery`
+            : `${dish.name} has no saved photos yet`
+        }
+        className="absolute inset-0 z-10 focus:outline-none focus:ring-4 focus:ring-accent-soft"
+        disabled={!hasDishImages}
+        type="button"
+        onClick={hasDishImages ? onOpenGallery : undefined}
+      />
       {hasDishImages ? (
         <>
           <img
@@ -1365,7 +2208,10 @@ function SupportingDishCard({
       ) : (
         <DishPhotoPlaceholder />
       )}
-      <div className="relative flex min-h-[102px] flex-col justify-end p-3">
+      <div className="absolute right-2 top-2 z-20">
+        <DishCardActions compact onDelete={onDelete} onEdit={onEdit} />
+      </div>
+      <div className="pointer-events-none relative z-10 flex min-h-[102px] flex-col justify-end p-3">
         <p className="truncate font-display text-[17px] font-semibold leading-none text-ink-primary">
           {dish.name}
         </p>
@@ -1380,7 +2226,43 @@ function SupportingDishCard({
           </span>
         </div>
       </div>
-    </button>
+    </article>
+  );
+}
+
+function DishCardActions({
+  compact = false,
+  onDelete,
+  onEdit,
+}: {
+  compact?: boolean;
+  onDelete: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <div
+      className={`flex shrink-0 items-center rounded-full border border-border/70 bg-bg/75 backdrop-blur ${
+        compact ? "gap-0.5 p-1" : "gap-1 p-1"
+      }`}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <button
+        aria-label="Edit dish"
+        className="flex h-7 w-7 items-center justify-center rounded-full text-ink-secondary transition hover:bg-accent-soft hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent-soft"
+        type="button"
+        onClick={onEdit}
+      >
+        <Pencil aria-hidden="true" size={compact ? 13 : 14} />
+      </button>
+      <button
+        aria-label="Delete dish"
+        className="flex h-7 w-7 items-center justify-center rounded-full text-error transition hover:bg-error/10 focus:outline-none focus:ring-2 focus:ring-error/20"
+        type="button"
+        onClick={onDelete}
+      >
+        <Trash2 aria-hidden="true" size={compact ? 13 : 14} />
+      </button>
+    </div>
   );
 }
 
@@ -1408,14 +2290,26 @@ function DishPhotoPlaceholder({
 
 function AllDishesSheet({
   dishes,
+  onDeleteDish,
+  onEditDish,
   onClose,
+  visitId,
 }: {
   dishes: RestaurantVisit["dishes"];
+  onDeleteDish: (visitId: string, dishId: string) => void;
+  onEditDish: (
+    visitId: string,
+    dishId: string,
+    values: DishDraftFormValues,
+  ) => void;
   onClose: () => void;
+  visitId: string;
 }) {
   const [galleryDish, setGalleryDish] = useState<
     RestaurantVisit["dishes"][number] | null
   >(null);
+  const [editingDish, setEditingDish] = useState<DishValue | null>(null);
+  const [deletingDish, setDeletingDish] = useState<DishValue | null>(null);
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-bg/75 p-0 backdrop-blur sm:items-center sm:p-4">
@@ -1466,7 +2360,9 @@ function AllDishesSheet({
                   className="group relative h-24 overflow-hidden rounded-[12px] bg-surface text-left focus:outline-none focus:ring-4 focus:ring-accent-soft"
                   disabled={!hasDishImages}
                   type="button"
-                  onClick={hasDishImages ? () => setGalleryDish(dish) : undefined}
+                  onClick={
+                    hasDishImages ? () => setGalleryDish(dish) : undefined
+                  }
                 >
                   {hasDishImages ? (
                     <>
@@ -1498,14 +2394,21 @@ function AllDishesSheet({
                           : "One-time order"}
                       </p>
                     </div>
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-bold text-ink-primary">
-                      <Star
-                        aria-hidden="true"
-                        className="fill-current text-rating-gold"
-                        size={13}
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-bold text-ink-primary">
+                        <Star
+                          aria-hidden="true"
+                          className="fill-current text-rating-gold"
+                          size={13}
+                        />
+                        {getDishRatingText(dish.rating)}
+                      </span>
+                      <DishCardActions
+                        compact
+                        onDelete={() => setDeletingDish(dish)}
+                        onEdit={() => setEditingDish(dish)}
                       />
-                      {getDishRatingText(dish.rating)}
-                    </span>
+                    </div>
                   </div>
                   {dish.notes ? (
                     <p className="mt-2 line-clamp-2 text-sm leading-6 text-ink-secondary">
@@ -1526,6 +2429,29 @@ function AllDishesSheet({
         <DishImageGalleryModal
           dish={galleryDish}
           onClose={() => setGalleryDish(null)}
+        />
+      ) : null}
+      {editingDish ? (
+        <DishEditorDialog
+          mode="edit"
+          dish={editingDish}
+          onCancel={() => setEditingDish(null)}
+          onSave={(values) => {
+            onEditDish(visitId, editingDish.id, values);
+            setEditingDish(null);
+          }}
+        />
+      ) : null}
+      {deletingDish ? (
+        <UiDeleteDialog
+          title="Delete dish?"
+          description={`Remove ${deletingDish.name} from this visit preview.`}
+          confirmLabel="Delete dish"
+          onCancel={() => setDeletingDish(null)}
+          onConfirm={() => {
+            onDeleteDish(visitId, deletingDish.id);
+            setDeletingDish(null);
+          }}
         />
       ) : null}
     </div>
@@ -2193,6 +3119,7 @@ function LogVisitDialog({
   });
 
   const {
+    clearErrors: clearDishErrors,
     formState: { errors: dishErrors },
     getValues: getDishValues,
     register: registerDish,
@@ -2217,7 +3144,22 @@ function LogVisitDialog({
     if (!files?.length) {
       return;
     }
-    setDishValue("images", [...selectedDishImages, ...Array.from(files)], {
+
+    const incomingFiles = Array.from(files);
+    const invalidFile = incomingFiles.find((file) =>
+      getImageValidationError(file),
+    );
+
+    if (invalidFile) {
+      setDishError("images", {
+        message: getImageValidationError(invalidFile),
+        type: "manual",
+      });
+      return;
+    }
+
+    clearDishErrors("images");
+    setDishValue("images", [...selectedDishImages, ...incomingFiles], {
       shouldDirty: true,
       shouldValidate: true,
     });
@@ -2232,9 +3174,10 @@ function LogVisitDialog({
         shouldValidate: true,
       },
     );
+    clearDishErrors("images");
   }
 
-  function addDishDraft() {
+  function validateDishDraft() {
     const parsed = dishDraftSchema.safeParse(getDishValues());
 
     if (!parsed.success) {
@@ -2248,12 +3191,26 @@ function LogVisitDialog({
           });
         }
       });
+      return null;
+    }
+
+    clearDishErrors();
+    return parsed.data;
+  }
+
+  function addDishDraft() {
+    const parsedDish = validateDishDraft();
+
+    if (!parsedDish) {
       return;
     }
 
-    parsed.data.id = crypto.randomUUID();
+    const dishWithId = {
+      ...parsedDish,
+      id: crypto.randomUUID(),
+    };
 
-    setDishDrafts((current) => [...current, parsed.data]);
+    setDishDrafts((current) => [...current, dishWithId]);
     resetDish({
       images: [],
       name: "",
@@ -2261,6 +3218,15 @@ function LogVisitDialog({
       rating: "",
       wouldEatAgain: true,
     });
+  }
+
+  function dishDraftHasContent(dish: DishDraftFormValues) {
+    return Boolean(
+      dish.name?.trim() ||
+      dish.notes?.trim() ||
+      dish.rating?.trim() ||
+      dish.images.length > 0,
+    );
   }
 
   async function submitVisit(values: VisitFormValues) {
@@ -2283,8 +3249,27 @@ function LogVisitDialog({
       return;
     }
 
+    const currentDishDraft = getDishValues();
+    let dishesToSubmit = dishDrafts;
+
+    if (dishDraftHasContent(currentDishDraft)) {
+      const parsedDish = validateDishDraft();
+
+      if (!parsedDish) {
+        return;
+      }
+
+      dishesToSubmit = [
+        ...dishDrafts,
+        {
+          ...parsedDish,
+          id: crypto.randomUUID(),
+        },
+      ];
+    }
+
     try {
-      await onSubmit(parsed.data, dishDrafts);
+      await onSubmit(parsed.data, dishesToSubmit);
     } catch (error) {
       setDialogError(
         error instanceof ApiError ? error.message : "Unable to log visit.",
@@ -2683,14 +3668,20 @@ function DishDraftPreviewCard({ dish }: { dish: DishDraftFormValues }) {
 
 function VisitRatingField({
   error,
+  label = "Visit rating",
   register,
   selectedRating,
   setValue,
 }: {
   error?: string;
+  label?: string;
   register: UseFormRegisterReturn;
   selectedRating: number;
-  setValue: ReturnType<typeof useForm<VisitFormValues>>["setValue"];
+  setValue: (
+    name: "rating",
+    value: string,
+    options?: { shouldDirty?: boolean; shouldValidate?: boolean },
+  ) => void;
 }) {
   return (
     <div>
@@ -2698,7 +3689,7 @@ function VisitRatingField({
         className="text-sm font-bold text-ink-primary"
         htmlFor="visitRating"
       >
-        Visit rating
+        {label}
       </label>
       <div className="mt-2 min-w-0 rounded-control border border-border bg-surface-sunken p-3 transition focus-within:border-accent focus-within:bg-surface focus-within:ring-4 focus-within:ring-accent-soft">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

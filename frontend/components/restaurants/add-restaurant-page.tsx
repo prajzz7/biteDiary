@@ -90,6 +90,7 @@ const restaurantSchema = z.object({
 });
 
 const dishDraftSchema = z.object({
+  id: z.string().trim().optional(),
   images: z
     .array(
       z.custom<File>(
@@ -135,6 +136,18 @@ type SubmitStatus = "idle" | "loading" | "success" | "error";
 
 const quickCuisines = ["Seafood", "Japanese", "Italian", "Indian", "Cafe"];
 const quickRatings = [10, 9.5, 9, 8.5, 8, 7.5];
+
+function getImageValidationError(file: File) {
+  if (file.size > MAX_FILE_SIZE) {
+    return "Each image must be 5MB or smaller";
+  }
+
+  if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+    return "Only .jpg, .png and .webp formats are supported.";
+  }
+
+  return "";
+}
 
 export default function AddRestaurantPage() {
   const [status, setStatus] = useState<SubmitStatus>("idle");
@@ -637,7 +650,6 @@ function toRestaurantPayload(
   dishDrafts: DishDraftFormValues[],
 ) {
   const firstDish = dishDrafts[0];
-  console.log("bannerImage", values);
 
   return {
     bannerImage: values.bannerImage,
@@ -928,6 +940,7 @@ function AddDishDialog({
   onSave: (dish: DishDraftFormValues) => void;
 }) {
   const {
+    clearErrors,
     formState: { errors },
     getValues,
     handleSubmit,
@@ -953,7 +966,21 @@ function AddDishDialog({
       return;
     }
 
-    setValue("images", [...selectedImages, ...Array.from(files)], {
+    const incomingFiles = Array.from(files);
+    const invalidFile = incomingFiles.find((file) =>
+      getImageValidationError(file),
+    );
+
+    if (invalidFile) {
+      setError("images", {
+        message: getImageValidationError(invalidFile),
+        type: "manual",
+      });
+      return;
+    }
+
+    clearErrors("images");
+    setValue("images", [...selectedImages, ...incomingFiles], {
       shouldDirty: true,
       shouldValidate: true,
     });
@@ -968,6 +995,7 @@ function AddDishDialog({
         shouldValidate: true,
       },
     );
+    clearErrors("images");
   }
 
   function submitDish() {
@@ -987,7 +1015,7 @@ function AddDishDialog({
       return;
     }
 
-    onSave(parsed.data);
+    onSave({ ...parsed.data, id: crypto.randomUUID() });
     reset();
   }
 

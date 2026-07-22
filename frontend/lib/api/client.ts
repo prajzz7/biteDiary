@@ -69,6 +69,7 @@ export type CreateRestaurantPayload = {
   city?: string;
   country?: string;
   cuisine?: string;
+  dishList?: RestaurantDishDraftPayload[];
   dishName?: string;
   dishNotes?: string;
   dishRating?: number;
@@ -79,6 +80,15 @@ export type CreateRestaurantPayload = {
   totalAmountPaid?: number;
   visitedAt?: string;
   visitNotes?: string;
+  wouldEatAgain?: boolean;
+};
+
+type RestaurantDishDraftPayload = {
+  id?: string;
+  images?: File[];
+  name?: string;
+  notes?: string;
+  rating?: string | number;
   wouldEatAgain?: boolean;
 };
 
@@ -340,6 +350,31 @@ function toRestaurantFormData(
 
   Object.entries(values).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") {
+      return;
+    }
+
+    if (key === "dishList") {
+      if (!Array.isArray(value)) {
+        return;
+      }
+
+      formData.append(
+        key,
+        JSON.stringify(
+          value.map(({ images, ...dish }) => ({
+            ...dish,
+            imageCount: images?.length ?? 0,
+          })),
+        ),
+      );
+
+      value.forEach((dish) => {
+        for (const image of dish.images ?? []) {
+          if (dish.id) {
+            formData.append(`dishImages^${dish.id}`, image);
+          }
+        }
+      });
       return;
     }
 
